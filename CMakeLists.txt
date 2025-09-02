@@ -9,8 +9,8 @@ target_compile_options(cxx_setup INTERFACE -Wall -Wpedantic -Wextra)
 
 find_package(SDL3 REQUIRED)
 
-add_executable(${PROJECT_NAME}
-  src/cube/cube.cpp
-)
+add_executable(${PROJECT_NAME})
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+target_sources(${PROJECT_NAME} PRIVATE ${SOURCES})
 
 target_link_libraries(${PROJECT_NAME} PUBLIC SDL3::SDL3 cxx_setup)
