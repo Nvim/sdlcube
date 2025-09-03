@@ -1,11 +1,12 @@
 #version 450 core
 
-layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec3 aCol;
-
-layout (location = 0) out vec3 col;
 void main()
 {
-  gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
-  col = aCol;
+  if (gl_VertexIndex == 0) {
+    gl_Position = vec4(-0.9, -0.9, 0.0, 1.0);
+  } else if (gl_VertexIndex == 1) {
+    gl_Position = vec4(0.9, -0.9, 0.0, 1.0);
+  } else if (gl_VertexIndex == 2) {
+    gl_Position = vec4(0.0, 0.9, 0.0, 1.0);
+  }
 }

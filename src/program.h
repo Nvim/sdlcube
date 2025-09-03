@@ -7,6 +7,7 @@ class Program {
 public:
   SDL_GPUDevice *Device;
   SDL_Window *Window;
+  ~Program() {};
 
 public:
   Program(SDL_GPUDevice *device, SDL_Window *window)
