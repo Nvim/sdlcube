@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Build and debug",
+      "program": "build/sdlcube",
+      "preLaunchTask": "Build"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "myPrompt",
+      "type": "promptString",
+      "description": "Program to run: ",
+      "default": "foobar"
+    }
+  ]
+}

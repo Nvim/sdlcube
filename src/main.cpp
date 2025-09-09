@@ -37,7 +37,8 @@ int main() {
   }
   SDL_Log("GPU claimed Window");
 
-  CubeProgram app{Device, Window, "resources/shaders/compiled/vert.spv", "resources/shaders/compiled/frag.spv"};
+  CubeProgram app{Device, Window, "resources/shaders/compiled/vert.spv",
+                  "resources/shaders/compiled/frag.spv"};
   if (!app.Init()) {
     SDL_Log("Couldn't init app.");
     return -1;
@@ -47,6 +48,7 @@ int main() {
       SDL_Log("App failed to Poll");
       break;
     }
+    app.UpdateTime();
     if (app.ShouldQuit()) {
       break;
     }

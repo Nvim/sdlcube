@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "shell",
+      "label": "Run",
+      "command": "build/sdlcube",
+      "args": [],
+    },
+    {
+      "type": "shell",
+      "label": "Build",
+      "command": "cmake",
+      "args": ["--build", "build"],
+    },
+    {
+      "type": "shell",
+      "label": "Build Shaders",
+      "command": "./shaders.sh",
+      "args": [],
+    },
+    {
+      "type": "shell",
+      "label": "Clean",
+      "command": "make",
+      "args": ["-C", "build", "clean"],
+    },
+  ]
+}

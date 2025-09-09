@@ -3,6 +3,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_stdinc.h>
+#include <glm/ext/matrix_float4x4.hpp>
+#include <glm/ext/matrix_transform.hpp>
 
 CubeProgram::CubeProgram(SDL_GPUDevice *device, SDL_Window *window,
                          const char *vertex_path, const char *fragment_path)
@@ -117,6 +119,9 @@ bool CubeProgram::Draw() {
   static int w, h;
   static SDL_GPUBufferBinding vBinding = {.buffer = vbuffer_, .offset = 0};
   static SDL_GPUBufferBinding iBinding = {.buffer = ibuffer_, .offset = 0};
+  static auto transform = glm::identity<glm::mat4>();
+  transform =
+      glm::rotate(transform, 1.0f * DeltaTime, glm::vec3{0.0f, 0.0f, 1.0f});
 
   SDL_GetWindowSizeInPixels(Window, &w, &h);
   vp.w = w;
@@ -141,6 +146,8 @@ bool CubeProgram::Draw() {
     colorTargetInfo.load_op = SDL_GPU_LOADOP_CLEAR;
     colorTargetInfo.store_op = SDL_GPU_STOREOP_STORE;
 
+    // SDL_PushGPUFragmentUniformData(cmdbuf, 0, &col, sizeof(col));
+    SDL_PushGPUVertexUniformData(cmdbuf, 0, &transform, sizeof(transform));
     SDL_GPURenderPass *renderPass =
         SDL_BeginGPURenderPass(cmdbuf, &colorTargetInfo, 1, NULL);
 
@@ -163,7 +170,7 @@ bool CubeProgram::LoadShaders() {
     SDL_Log("Couldn't load vertex shader at path %s", vertex_path_);
     return false;
   }
-  fragment_ = LoadShader(fragment_path_, Device, 0, 0, 0, 0);
+  fragment_ = LoadShader(fragment_path_, Device, 0, 1, 0, 0);
   if (fragment_ == nullptr) {
     SDL_Log("Couldn't load fragment shader at path %s", fragment_path_);
     return false;
@@ -198,12 +205,12 @@ bool CubeProgram::SendVertexData() {
     return false;
   }
 
-  for(Uint8 i = 0; i < VERT_COUNT; ++i) {
+  for (Uint8 i = 0; i < VERT_COUNT; ++i) {
     transferData[i] = verts[i];
   }
 
   Uint16 *indexData = (Uint16 *)&transferData[VERT_COUNT];
-  for(Uint8 i = 0; i < INDEX_COUNT; ++i) {
+  for (Uint8 i = 0; i < INDEX_COUNT; ++i) {
     indexData[i] = indices[i];
   }
 

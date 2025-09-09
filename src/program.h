@@ -7,6 +7,8 @@ class Program {
 public:
   SDL_GPUDevice *Device;
   SDL_Window *Window;
+  float DeltaTime{0.0f};
+  float lastTime{0.0f};
   ~Program() {};
 
 public:
@@ -16,4 +18,9 @@ public:
   virtual bool Poll() = 0;
   virtual bool Draw() = 0;
   virtual bool ShouldQuit() = 0;
+  void UpdateTime() {
+    float newTime = SDL_GetTicks() / 1000.0f;
+    DeltaTime = newTime - lastTime;
+    lastTime = newTime;
+  }
 };

@@ -8,9 +8,10 @@ target_include_directories(cxx_setup INTERFACE ${PROJECT_SOURCE_DIR})
 target_compile_options(cxx_setup INTERFACE -Wall -Wpedantic -Wextra)
 
 find_package(SDL3 REQUIRED)
+find_package(glm REQUIRED)
 
 add_executable(${PROJECT_NAME})
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 target_sources(${PROJECT_NAME} PRIVATE ${SOURCES})
 
-target_link_libraries(${PROJECT_NAME} PUBLIC SDL3::SDL3 cxx_setup)
+target_link_libraries(${PROJECT_NAME} PUBLIC SDL3::SDL3 glm::glm cxx_setup)
