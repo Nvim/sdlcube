@@ -23,8 +23,7 @@ int main() {
   }
   SDL_Log("Created Device");
 
-  auto Window =
-      SDL_CreateWindow("Some cube idk", 640, 480, SDL_WINDOW_RESIZABLE);
+  auto Window = SDL_CreateWindow("Some cube idk", 640, 480, 0);
   if (Window == NULL) {
     SDL_Log("CreateWindow failed: %s", SDL_GetError());
     return -1;

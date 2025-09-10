@@ -83,8 +83,8 @@ bool CubeProgram::Init() {
           {
               .compare_op = SDL_GPU_COMPAREOP_LESS,
               .write_mask = 0xFF,
-              .enable_depth_test = false,
-              .enable_depth_write = false,
+              .enable_depth_test = true,
+              .enable_depth_write = true,
               .enable_stencil_test = false,
           },
       .target_info =
@@ -92,7 +92,7 @@ bool CubeProgram::Init() {
               .color_target_descriptions = color_descs,
               .num_color_targets = 1,
               .depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM,
-              .has_depth_stencil_target = false,
+              .has_depth_stencil_target = true,
           },
   };
 
@@ -108,6 +108,12 @@ bool CubeProgram::Init() {
     return false;
   }
   SDL_Log("Sent vertex data to GPU");
+
+  if (!CreateDepthTexture()) {
+    SDL_Log("Couldn't create depth texture!");
+    return false;
+  }
+  SDL_Log("Created depth texture");
 
   transform_.translation_ = {0.f, 0.f, 0.5f};
   transform_.scale_ = {.2f, .2f, .2f};
@@ -168,10 +174,20 @@ bool CubeProgram::Draw() {
     colorTargetInfo.load_op = SDL_GPU_LOADOP_CLEAR;
     colorTargetInfo.store_op = SDL_GPU_STOREOP_STORE;
 
+    SDL_GPUDepthStencilTargetInfo depthStencilTargetInfo{};
+    depthStencilTargetInfo.texture = depth_texture_;
+    depthStencilTargetInfo.cycle = true;
+    depthStencilTargetInfo.clear_depth = 1;
+    depthStencilTargetInfo.clear_stencil = 0;
+    depthStencilTargetInfo.load_op = SDL_GPU_LOADOP_CLEAR;
+    depthStencilTargetInfo.store_op = SDL_GPU_STOREOP_STORE;
+    depthStencilTargetInfo.stencil_load_op = SDL_GPU_LOADOP_CLEAR;
+    depthStencilTargetInfo.stencil_store_op = SDL_GPU_STOREOP_STORE;
+
     // glm::mat4 u_mats[2] = {proj * view, model};
     SDL_PushGPUVertexUniformData(cmdbuf, 0, &m, sizeof(glm::mat4));
-    SDL_GPURenderPass *renderPass =
-        SDL_BeginGPURenderPass(cmdbuf, &colorTargetInfo, 1, NULL);
+    SDL_GPURenderPass *renderPass = SDL_BeginGPURenderPass(
+        cmdbuf, &colorTargetInfo, 1, &depthStencilTargetInfo);
 
     SDL_BindGPUGraphicsPipeline(renderPass, pipeline_);
     SDL_BindGPUVertexBuffers(renderPass, 0, &vBinding, 1);
@@ -266,4 +282,20 @@ bool CubeProgram::SendVertexData() {
   SDL_ReleaseGPUTransferBuffer(Device, transferBuffer);
 
   return true;
+}
+
+bool CubeProgram::CreateDepthTexture() {
+  auto info = SDL_GPUTextureCreateInfo{
+      .type = SDL_GPU_TEXTURETYPE_2D,
+      .format = SDL_GPU_TEXTUREFORMAT_D16_UNORM,
+      .width = 640,
+      .height = 480,
+      .layer_count_or_depth = 1,
+      .num_levels = 1,
+      .sample_count = SDL_GPU_SAMPLECOUNT_1,
+      .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER |
+               SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET};
+  depth_texture_ = SDL_CreateGPUTexture(Device, &info);
+
+  return depth_texture_ != nullptr;
 }

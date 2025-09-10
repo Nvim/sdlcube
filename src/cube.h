@@ -20,14 +20,19 @@ public:
   ~CubeProgram();
 
 private:
+  bool LoadShaders();
+  bool SendVertexData();
+  bool CreateDepthTexture();
+
+private:
   bool quit{false};
   Transform transform_;
   const char *vertex_path_;
   const char *fragment_path_;
+  SDL_GPUTexture *depth_texture_;
   SDL_GPUShader *vertex_{nullptr};
   SDL_GPUShader *fragment_{nullptr};
   SDL_GPUGraphicsPipeline *pipeline_{nullptr};
-  bool SendVertexData();
   SDL_GPUBuffer *vbuffer_;
   SDL_GPUBuffer *ibuffer_;
 
@@ -88,7 +93,4 @@ private:
     20, 21, 22, 20, 22, 23
   };
   // clang-format on
-
-private:
-  bool LoadShaders();
 };
