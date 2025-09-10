@@ -1,4 +1,5 @@
 #include "cube.h"
+#include "src/camera.h"
 #include "util.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
@@ -115,8 +116,8 @@ bool CubeProgram::Init() {
   }
   SDL_Log("Created depth texture");
 
-  transform_.translation_ = {0.f, 0.f, 0.5f};
-  transform_.scale_ = {.2f, .2f, .2f};
+  transform_.translation_ = {0.f, 0.f, 4.0f};
+  transform_.scale_ = {1.f, 1.f, 1.f};
   // transform_.rotation_.x = glm::radians(30.0f);
   // transform_.rotation_.y = glm::radians(30.0f);
 
@@ -150,6 +151,7 @@ bool CubeProgram::Draw() {
   transform_.rotation_.x =
       glm::mod(transform_.rotation_.x + DeltaTime, glm::two_pi<float>());
   auto m = transform_.Matrix();
+  auto proj = camera_.Matrix();
 
   SDL_GetWindowSizeInPixels(Window, &w, &h);
   vp.w = w;
@@ -185,7 +187,8 @@ bool CubeProgram::Draw() {
     depthStencilTargetInfo.stencil_store_op = SDL_GPU_STOREOP_STORE;
 
     // glm::mat4 u_mats[2] = {proj * view, model};
-    SDL_PushGPUVertexUniformData(cmdbuf, 0, &m, sizeof(glm::mat4));
+    auto mv = proj * m;
+    SDL_PushGPUVertexUniformData(cmdbuf, 0, &mv, sizeof(glm::mat4));
     SDL_GPURenderPass *renderPass = SDL_BeginGPURenderPass(
         cmdbuf, &colorTargetInfo, 1, &depthStencilTargetInfo);
 

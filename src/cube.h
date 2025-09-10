@@ -1,5 +1,6 @@
 #pragma once
 
+#include "camera.h"
 #include "program.h"
 #include "transform.h"
 #include <SDL3/SDL_gpu.h>
@@ -27,6 +28,7 @@ private:
 private:
   bool quit{false};
   Transform transform_;
+  Camera camera_{glm::radians(60.0f), 680 / 480.f, .1f, 100.f};
   const char *vertex_path_;
   const char *fragment_path_;
   SDL_GPUTexture *depth_texture_;
