@@ -3,8 +3,11 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_stdinc.h>
+#include <glm/common.hpp>
+#include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/gtc/constants.hpp>
 
 CubeProgram::CubeProgram(SDL_GPUDevice *device, SDL_Window *window,
                          const char *vertex_path, const char *fragment_path)
@@ -49,7 +52,7 @@ bool CubeProgram::Init() {
        .offset = 0},
       {.location = 1,
        .buffer_slot = 0,
-       .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+       .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
        .offset = sizeof(float) * 3}};
 
   SDL_GPUVertexBufferDescription vertex_desc[] = {{
@@ -73,11 +76,23 @@ bool CubeProgram::Init() {
       .rasterizer_state =
           {
               .fill_mode = SDL_GPU_FILLMODE_FILL,
+              .cull_mode = SDL_GPU_CULLMODE_NONE,
+              .front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
+          },
+      .depth_stencil_state =
+          {
+              .compare_op = SDL_GPU_COMPAREOP_LESS,
+              .write_mask = 0xFF,
+              .enable_depth_test = false,
+              .enable_depth_write = false,
+              .enable_stencil_test = false,
           },
       .target_info =
           {
               .color_target_descriptions = color_descs,
               .num_color_targets = 1,
+              .depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM,
+              .has_depth_stencil_target = false,
           },
   };
 
@@ -93,6 +108,11 @@ bool CubeProgram::Init() {
     return false;
   }
   SDL_Log("Sent vertex data to GPU");
+
+  transform_.translation_ = {0.f, 0.f, 0.5f};
+  transform_.scale_ = {.2f, .2f, .2f};
+  // transform_.rotation_.x = glm::radians(30.0f);
+  // transform_.rotation_.y = glm::radians(30.0f);
 
   return true;
 }
@@ -119,9 +139,11 @@ bool CubeProgram::Draw() {
   static int w, h;
   static SDL_GPUBufferBinding vBinding = {.buffer = vbuffer_, .offset = 0};
   static SDL_GPUBufferBinding iBinding = {.buffer = ibuffer_, .offset = 0};
-  static auto transform = glm::identity<glm::mat4>();
-  transform =
-      glm::rotate(transform, 1.0f * DeltaTime, glm::vec3{0.0f, 0.0f, 1.0f});
+  transform_.rotation_.y =
+      glm::mod(transform_.rotation_.y + DeltaTime, glm::two_pi<float>());
+  transform_.rotation_.x =
+      glm::mod(transform_.rotation_.x + DeltaTime, glm::two_pi<float>());
+  auto m = transform_.Matrix();
 
   SDL_GetWindowSizeInPixels(Window, &w, &h);
   vp.w = w;
@@ -146,8 +168,8 @@ bool CubeProgram::Draw() {
     colorTargetInfo.load_op = SDL_GPU_LOADOP_CLEAR;
     colorTargetInfo.store_op = SDL_GPU_STOREOP_STORE;
 
-    // SDL_PushGPUFragmentUniformData(cmdbuf, 0, &col, sizeof(col));
-    SDL_PushGPUVertexUniformData(cmdbuf, 0, &transform, sizeof(transform));
+    // glm::mat4 u_mats[2] = {proj * view, model};
+    SDL_PushGPUVertexUniformData(cmdbuf, 0, &m, sizeof(glm::mat4));
     SDL_GPURenderPass *renderPass =
         SDL_BeginGPURenderPass(cmdbuf, &colorTargetInfo, 1, NULL);
 

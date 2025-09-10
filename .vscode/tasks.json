@@ -3,6 +3,19 @@
   "tasks": [
     {
       "type": "shell",
+      "label": "Clean, build, and run",
+      "dependsOrder": "sequence",
+      "dependsOn": ["Clean", "Build", "Build Shaders", "Run"]
+    },
+    {
+      "type": "shell",
+      "label": "Build and run",
+      "command": "build/sdlcube",
+      "dependsOrder": "sequence",
+      "dependsOn": ["Build"]
+    },
+    {
+      "type": "shell",
       "label": "Run",
       "command": "build/sdlcube",
       "args": [],

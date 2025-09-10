@@ -1,3 +1,5 @@
+#pragma once
+
 #include <SDL3/SDL_gpu.h>
 
 SDL_GPUShader *LoadShader(const char *path, SDL_GPUDevice *device,
