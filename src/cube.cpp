@@ -116,10 +116,11 @@ bool CubeProgram::Init() {
   }
   SDL_Log("Created depth texture");
 
-  transform_.translation_ = {0.f, 0.f, 4.0f};
+  transform_.translation_ = {0.f, 0.f, 0.0f};
   transform_.scale_ = {1.f, 1.f, 1.f};
-  // transform_.rotation_.x = glm::radians(30.0f);
-  // transform_.rotation_.y = glm::radians(30.0f);
+
+  camera_.Position = glm::vec3{0.f, 1.f, -4.f};
+  camera_.Target = glm::vec3{0.f, 0.f, 0.f};
 
   return true;
 }
@@ -146,12 +147,20 @@ bool CubeProgram::Draw() {
   static int w, h;
   static SDL_GPUBufferBinding vBinding = {.buffer = vbuffer_, .offset = 0};
   static SDL_GPUBufferBinding iBinding = {.buffer = ibuffer_, .offset = 0};
+  static float c = -1.f; 
   transform_.rotation_.y =
       glm::mod(transform_.rotation_.y + DeltaTime, glm::two_pi<float>());
   transform_.rotation_.x =
       glm::mod(transform_.rotation_.x + DeltaTime, glm::two_pi<float>());
-  auto m = transform_.Matrix();
-  auto proj = camera_.Matrix();
+  if (camera_.Position.z < -10.f) {
+    c = 1.f;
+  } else if (camera_.Position.z > -1.f) {
+    c = -1.f;
+  }
+  camera_.Position.z += c*DeltaTime*2.5f;
+  camera_.Touched = true;
+  camera_.Update();
+  auto mvp = camera_.Projection() * camera_.View() * transform_.Matrix();
 
   SDL_GetWindowSizeInPixels(Window, &w, &h);
   vp.w = w;
@@ -186,9 +195,7 @@ bool CubeProgram::Draw() {
     depthStencilTargetInfo.stencil_load_op = SDL_GPU_LOADOP_CLEAR;
     depthStencilTargetInfo.stencil_store_op = SDL_GPU_STOREOP_STORE;
 
-    // glm::mat4 u_mats[2] = {proj * view, model};
-    auto mv = proj * m;
-    SDL_PushGPUVertexUniformData(cmdbuf, 0, &mv, sizeof(glm::mat4));
+    SDL_PushGPUVertexUniformData(cmdbuf, 0, &mvp, sizeof(glm::mat4));
     SDL_GPURenderPass *renderPass = SDL_BeginGPURenderPass(
         cmdbuf, &colorTargetInfo, 1, &depthStencilTargetInfo);
 

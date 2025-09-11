@@ -14,4 +14,5 @@ add_executable(${PROJECT_NAME})
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 target_sources(${PROJECT_NAME} PRIVATE ${SOURCES})
 
+target_compile_definitions(${PROJECT_NAME} PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
 target_link_libraries(${PROJECT_NAME} PUBLIC SDL3::SDL3 glm::glm cxx_setup)

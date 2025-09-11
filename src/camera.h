@@ -4,13 +4,33 @@
 
 class Camera {
 public:
-  Camera(float fov, float aspect, float near, float far);
-  glm::mat4 &Matrix();
+  // clang-format off
+  Camera(
+    float fov=60.0f,
+    float aspect=4/3.f,
+    float near=.1f,
+    float far=100.f,
+    glm::vec3 up={0.f, -1.f, 0.f}
+  );
+  // clang-format on
+  void Update();
+  const glm::mat4 &Projection() const { return proj_; }
+  const glm::mat4 &View() const { return view_; }
+
+public:
+  glm::vec3 Position{0.f, 0.f, 4.f};
+  glm::vec3 Target{0.f};
+  bool Touched{true};
 
 private:
-  glm::mat4 matrix_;
+  glm::mat4 proj_;
+  glm::mat4 view_;
+  // TODO: storing these for GUI config
   float fov_;
   float aspect_;
   float near_;
   float far_;
+  glm::vec3 up_;
+
+  void setViewTarget();
 };
