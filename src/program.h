@@ -19,6 +19,7 @@ public:
   virtual bool Init() = 0;
   virtual bool Poll() = 0;
   virtual bool Draw() = 0;
+  virtual void Quit() = 0;
   virtual bool ShouldQuit() = 0;
   void UpdateTime() {
     float newTime = SDL_GetTicks() / 1000.0f;

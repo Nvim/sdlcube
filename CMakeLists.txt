@@ -10,9 +10,24 @@ target_compile_options(cxx_setup INTERFACE -Wall -Wpedantic -Wextra)
 find_package(SDL3 REQUIRED)
 find_package(glm REQUIRED)
 
+add_library(imgui)
+target_include_directories(imgui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui")
+target_sources(imgui PRIVATE 
+"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/imgui.cpp"
+"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/imgui_demo.cpp"
+"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/imgui_draw.cpp"
+"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/imgui_tables.cpp"
+"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/imgui_widgets.cpp"
+"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/backends/imgui_impl_sdlgpu3.cpp"
+"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/backends/imgui_impl_sdl3.cpp"
+# "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/backends/imgui_impl_vulkan.cpp"
+)
+target_link_libraries(imgui PUBLIC SDL3::SDL3)
+
 add_executable(${PROJECT_NAME})
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 target_sources(${PROJECT_NAME} PRIVATE ${SOURCES})
+target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty")
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
-target_link_libraries(${PROJECT_NAME} PUBLIC SDL3::SDL3 glm::glm cxx_setup)
+target_link_libraries(${PROJECT_NAME} PUBLIC SDL3::SDL3 glm::glm imgui cxx_setup)

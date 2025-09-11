@@ -23,7 +23,7 @@ int main() {
   }
   SDL_Log("Created Device");
 
-  auto Window = SDL_CreateWindow("Some cube idk", 640, 480, 0);
+  auto Window = SDL_CreateWindow("Some cube idk", 1600, 1200, 0);
   if (Window == NULL) {
     SDL_Log("CreateWindow failed: %s", SDL_GetError());
     return -1;
@@ -36,12 +36,21 @@ int main() {
   }
   SDL_Log("GPU claimed Window");
 
-  CubeProgram app{Device, Window, "resources/shaders/compiled/vert.spv",
-                  "resources/shaders/compiled/frag.spv"};
+  CubeProgram app{Device,
+                  Window,
+                  "resources/shaders/compiled/vert.spv",
+                  "resources/shaders/compiled/frag.spv",
+                  1200,
+                  900};
+
   if (!app.Init()) {
     SDL_Log("Couldn't init app.");
+    SDL_ReleaseWindowFromGPUDevice(Device, Window);
+    SDL_DestroyWindow(Window);
+    SDL_DestroyGPUDevice(Device);
     return -1;
   }
+
   while (!app.ShouldQuit()) {
     if (!app.Poll()) {
       SDL_Log("App failed to Poll");
@@ -56,6 +65,7 @@ int main() {
       break;
     };
   }
+  app.Quit();
 
   SDL_Log("Releasing resources..");
   SDL_ReleaseWindowFromGPUDevice(Device, Window);

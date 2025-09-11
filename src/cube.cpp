@@ -3,17 +3,48 @@
 #include "util.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
+#include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 #include <glm/common.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtc/constants.hpp>
+#include <imgui/backends/imgui_impl_sdl3.h>
+#include <imgui/backends/imgui_impl_sdlgpu3.h>
+#include <imgui/imgui.h>
 
 CubeProgram::CubeProgram(SDL_GPUDevice *device, SDL_Window *window,
-                         const char *vertex_path, const char *fragment_path)
+                         const char *vertex_path, const char *fragment_path,
+                         int w, int h)
     : Program{device, window}, vertex_path_{vertex_path},
-      fragment_path_{fragment_path} {}
+      fragment_path_{fragment_path}, vp_width_{w}, vp_height_{h} {
+
+  {
+    scene_color_target_info_.clear_color = {0.1f, 0.1f, 0.1f, 1.0f};
+    scene_color_target_info_.load_op = SDL_GPU_LOADOP_CLEAR;
+    scene_color_target_info_.store_op = SDL_GPU_STOREOP_STORE;
+  }
+
+  {
+    scene_depth_target_info_.cycle = true;
+    scene_depth_target_info_.clear_depth = 1;
+    scene_depth_target_info_.clear_stencil = 0;
+    scene_depth_target_info_.load_op = SDL_GPU_LOADOP_CLEAR;
+    scene_depth_target_info_.store_op = SDL_GPU_STOREOP_STORE;
+    scene_depth_target_info_.stencil_load_op = SDL_GPU_LOADOP_CLEAR;
+    scene_depth_target_info_.stencil_store_op = SDL_GPU_STOREOP_STORE;
+  }
+
+  {
+    swapchain_target_info_.clear_color = {.1f, .1f, .1f, .1f};
+    swapchain_target_info_.load_op = SDL_GPU_LOADOP_CLEAR;
+    swapchain_target_info_.store_op = SDL_GPU_STOREOP_STORE;
+    swapchain_target_info_.mip_level = 0;
+    swapchain_target_info_.layer_or_depth_plane = 0;
+    swapchain_target_info_.cycle = false;
+  }
+}
 
 CubeProgram::~CubeProgram() {
   if (vertex_) {
@@ -24,13 +55,18 @@ CubeProgram::~CubeProgram() {
     SDL_ReleaseGPUShader(Device, fragment_);
     SDL_Log("Released fragment shader");
   }
-  if (pipeline_) {
-    SDL_ReleaseGPUGraphicsPipeline(Device, pipeline_);
+  if (scene_pipeline_) {
+    SDL_ReleaseGPUGraphicsPipeline(Device, scene_pipeline_);
     SDL_Log("Released pipeline");
   }
 }
 
 bool CubeProgram::Init() {
+  if (!InitGui()) {
+    SDL_Log("Couldn't init imgui");
+    return false;
+  }
+  SDL_Log("Started ImGui");
   SDL_GPUShaderFormat backendFormats = SDL_GetGPUShaderFormats(Device);
   if (!(backendFormats & SDL_GPU_SHADERFORMAT_SPIRV)) {
     SDL_Log("Backend doesn't support SPRIR-V");
@@ -97,8 +133,8 @@ bool CubeProgram::Init() {
           },
   };
 
-  pipeline_ = SDL_CreateGPUGraphicsPipeline(Device, &pipelineCreateInfo);
-  if (pipeline_ == NULL) {
+  scene_pipeline_ = SDL_CreateGPUGraphicsPipeline(Device, &pipelineCreateInfo);
+  if (scene_pipeline_ == NULL) {
     SDL_Log("Couldn't create pipeline!");
     return false;
   }
@@ -110,11 +146,11 @@ bool CubeProgram::Init() {
   }
   SDL_Log("Sent vertex data to GPU");
 
-  if (!CreateDepthTexture()) {
+  if (!CreateSceneRenderTargets()) {
     SDL_Log("Couldn't create depth texture!");
     return false;
   }
-  SDL_Log("Created depth texture");
+  SDL_Log("Created render target textures");
 
   transform_.translation_ = {0.f, 0.f, 0.0f};
   transform_.scale_ = {1.f, 1.f, 1.f};
@@ -131,6 +167,7 @@ bool CubeProgram::Poll() {
   SDL_Event evt;
 
   while (SDL_PollEvent(&evt)) {
+    ImGui_ImplSDL3_ProcessEvent(&evt);
     if (evt.type == SDL_EVENT_QUIT) {
       quit = true;
     } else if (evt.type == SDL_EVENT_KEY_DOWN) {
@@ -142,12 +179,9 @@ bool CubeProgram::Poll() {
   return true;
 }
 
-bool CubeProgram::Draw() {
-  static SDL_GPUViewport vp = {0, 0, 0, 0, 0.1f, 1.0f};
-  static int w, h;
-  static SDL_GPUBufferBinding vBinding = {.buffer = vbuffer_, .offset = 0};
-  static SDL_GPUBufferBinding iBinding = {.buffer = ibuffer_, .offset = 0};
-  static float c = -1.f; 
+void CubeProgram::UpdateScene() {
+  static float c = -1.f;
+
   transform_.rotation_.y =
       glm::mod(transform_.rotation_.y + DeltaTime, glm::two_pi<float>());
   transform_.rotation_.x =
@@ -157,14 +191,20 @@ bool CubeProgram::Draw() {
   } else if (camera_.Position.z > -1.f) {
     c = -1.f;
   }
-  camera_.Position.z += c*DeltaTime*2.5f;
+  camera_.Position.z += c * DeltaTime * 2.5f;
   camera_.Touched = true;
   camera_.Update();
-  auto mvp = camera_.Projection() * camera_.View() * transform_.Matrix();
+}
 
-  SDL_GetWindowSizeInPixels(Window, &w, &h);
-  vp.w = w;
-  vp.h = h;
+bool CubeProgram::Draw() {
+  static const SDL_GPUViewport scene_vp{
+      0, 0, float(vp_width_), float(vp_height_), 0.1f, 1.0f};
+  static const SDL_GPUBufferBinding vBinding{vbuffer_, 0};
+  static const SDL_GPUBufferBinding iBinding{ibuffer_, 0};
+
+  UpdateScene();
+  auto mvp = camera_.Projection() * camera_.View() * transform_.Matrix();
+  auto draw_data = DrawGui();
 
   SDL_GPUCommandBuffer *cmdbuf = SDL_AcquireGPUCommandBuffer(Device);
   if (cmdbuf == NULL) {
@@ -179,37 +219,43 @@ bool CubeProgram::Draw() {
     return false;
   }
   if (swapchainTexture != NULL) {
-    SDL_GPUColorTargetInfo colorTargetInfo{};
-    colorTargetInfo.texture = swapchainTexture;
-    colorTargetInfo.clear_color = {0.2f, 0.2f, 0.2f, 1.0f};
-    colorTargetInfo.load_op = SDL_GPU_LOADOP_CLEAR;
-    colorTargetInfo.store_op = SDL_GPU_STOREOP_STORE;
 
-    SDL_GPUDepthStencilTargetInfo depthStencilTargetInfo{};
-    depthStencilTargetInfo.texture = depth_texture_;
-    depthStencilTargetInfo.cycle = true;
-    depthStencilTargetInfo.clear_depth = 1;
-    depthStencilTargetInfo.clear_stencil = 0;
-    depthStencilTargetInfo.load_op = SDL_GPU_LOADOP_CLEAR;
-    depthStencilTargetInfo.store_op = SDL_GPU_STOREOP_STORE;
-    depthStencilTargetInfo.stencil_load_op = SDL_GPU_LOADOP_CLEAR;
-    depthStencilTargetInfo.stencil_store_op = SDL_GPU_STOREOP_STORE;
+    ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmdbuf);
+    scene_color_target_info_.texture = color_texture_;
+    scene_depth_target_info_.texture = depth_texture_;
+    swapchain_target_info_.texture = swapchainTexture;
 
     SDL_PushGPUVertexUniformData(cmdbuf, 0, &mvp, sizeof(glm::mat4));
-    SDL_GPURenderPass *renderPass = SDL_BeginGPURenderPass(
-        cmdbuf, &colorTargetInfo, 1, &depthStencilTargetInfo);
 
-    SDL_BindGPUGraphicsPipeline(renderPass, pipeline_);
-    SDL_BindGPUVertexBuffers(renderPass, 0, &vBinding, 1);
-    SDL_BindGPUIndexBuffer(renderPass, &iBinding,
+    // Scene Pass
+    SDL_GPURenderPass *scenePass = SDL_BeginGPURenderPass(
+        cmdbuf, &scene_color_target_info_, 1, &scene_depth_target_info_);
+
+    SDL_BindGPUGraphicsPipeline(scenePass, scene_pipeline_);
+    SDL_BindGPUVertexBuffers(scenePass, 0, &vBinding, 1);
+    SDL_BindGPUIndexBuffer(scenePass, &iBinding,
                            SDL_GPU_INDEXELEMENTSIZE_16BIT);
-    SDL_SetGPUViewport(renderPass, &vp);
-    SDL_DrawGPUIndexedPrimitives(renderPass, INDEX_COUNT, 1, 0, 0, 0);
-    SDL_EndGPURenderPass(renderPass);
+    SDL_SetGPUViewport(scenePass, &scene_vp);
+    SDL_DrawGPUIndexedPrimitives(scenePass, INDEX_COUNT, 1, 0, 0, 0);
+    SDL_EndGPURenderPass(scenePass);
+
+    // GUI Pass
+    SDL_GPURenderPass *guiPass =
+        SDL_BeginGPURenderPass(cmdbuf, &swapchain_target_info_, 1, nullptr);
+
+    ImGui_ImplSDLGPU3_RenderDrawData(draw_data, cmdbuf, guiPass);
+    SDL_EndGPURenderPass(guiPass);
   }
 
   SDL_SubmitGPUCommandBuffer(cmdbuf);
   return true;
+}
+
+void CubeProgram::Quit() {
+  SDL_WaitForGPUIdle(Device);
+  ImGui_ImplSDL3_Shutdown();
+  ImGui_ImplSDLGPU3_Shutdown();
+  ImGui::DestroyContext();
 }
 
 bool CubeProgram::LoadShaders() {
@@ -294,18 +340,92 @@ bool CubeProgram::SendVertexData() {
   return true;
 }
 
-bool CubeProgram::CreateDepthTexture() {
-  auto info = SDL_GPUTextureCreateInfo{
-      .type = SDL_GPU_TEXTURETYPE_2D,
-      .format = SDL_GPU_TEXTUREFORMAT_D16_UNORM,
-      .width = 640,
-      .height = 480,
-      .layer_count_or_depth = 1,
-      .num_levels = 1,
-      .sample_count = SDL_GPU_SAMPLECOUNT_1,
-      .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER |
-               SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET};
+bool CubeProgram::CreateSceneRenderTargets() {
+
+  auto info =
+      SDL_GPUTextureCreateInfo{.type = SDL_GPU_TEXTURETYPE_2D,
+                               .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+                               .width = static_cast<Uint32>(vp_width_),
+                               .height = static_cast<Uint32>(vp_height_),
+                               .layer_count_or_depth = 1,
+                               .num_levels = 1,
+                               .sample_count = SDL_GPU_SAMPLECOUNT_1,
+                               .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER |
+                                        SDL_GPU_TEXTUREUSAGE_COLOR_TARGET};
+  color_texture_ = SDL_CreateGPUTexture(Device, &info);
+
+  info.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+  info.usage =
+      SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
   depth_texture_ = SDL_CreateGPUTexture(Device, &info);
 
-  return depth_texture_ != nullptr;
+  return depth_texture_ != nullptr && color_texture_ != nullptr;
+}
+
+bool CubeProgram::InitGui() {
+  float main_scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  (void)io;
+  io.ConfigFlags |=
+      ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+  io.ConfigFlags |=
+      ImGuiConfigFlags_NavEnableGamepad;            // Enable Gamepad Controls
+  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking
+
+  // Setup Dear ImGui style
+  ImGui::StyleColorsDark();
+  // ImGui::StyleColorsLight();
+
+  // Setup scaling
+  ImGuiStyle &style = ImGui::GetStyle();
+  style.ScaleAllSizes(main_scale);
+  style.FontScaleDpi = main_scale;
+
+  // Setup Platform/Renderer backends
+  if (!ImGui_ImplSDL3_InitForSDLGPU(Window)) {
+    return false;
+  };
+  ImGui_ImplSDLGPU3_InitInfo init_info = {};
+  init_info.Device = Device;
+  init_info.ColorTargetFormat =
+      SDL_GetGPUSwapchainTextureFormat(Device, Window);
+  init_info.MSAASamples = SDL_GPU_SAMPLECOUNT_1;
+  init_info.SwapchainComposition = SDL_GPU_SWAPCHAINCOMPOSITION_SDR;
+  init_info.PresentMode = SDL_GPU_PRESENTMODE_VSYNC;
+  return ImGui_ImplSDLGPU3_Init(&init_info);
+}
+
+ImDrawData *CubeProgram::DrawGui() {
+
+  // Init frame:
+  {
+    ImGui_ImplSDLGPU3_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+    ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
+  }
+
+  // GUI stuff
+  {
+    if (ImGui::Begin("Scene")) {
+      ImGui::Text("Hello world");
+      ImGui::Image((ImTextureID)(intptr_t)color_texture_,
+                   ImVec2((float)vp_width_, (float)vp_height_));
+      ImGui::End();
+    }
+
+    ImGui::ShowMetricsWindow();
+
+    if (ImGui::Begin("Camera")) {
+      if (ImGui::InputFloat3("position", (float *)&camera_.Position)) {
+        camera_.Touched = true;
+      }
+      ImGui::End();
+    }
+  }
+
+  ImGui::Render();
+  return ImGui::GetDrawData();
 }
