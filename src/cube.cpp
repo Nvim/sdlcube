@@ -44,21 +44,42 @@ CubeProgram::CubeProgram(SDL_GPUDevice *device, SDL_Window *window,
     swapchain_target_info_.layer_or_depth_plane = 0;
     swapchain_target_info_.cycle = false;
   }
+
+  {
+    rotations_[0] = Rotation{
+        "X Axis",
+        &cube_transform_.rotation_.x,
+        0.f,
+    };
+    rotations_[1] = Rotation{
+        "Y Axis",
+        &cube_transform_.rotation_.y,
+        1.f,
+    };
+    rotations_[2] = Rotation{
+        "Z Axis",
+        &cube_transform_.rotation_.z,
+        0.f,
+    };
+  }
 }
 
 CubeProgram::~CubeProgram() {
-  if (vertex_) {
-    SDL_ReleaseGPUShader(Device, vertex_);
-    SDL_Log("Released vertex shader");
-  }
-  if (fragment_) {
-    SDL_ReleaseGPUShader(Device, fragment_);
-    SDL_Log("Released fragment shader");
-  }
-  if (scene_pipeline_) {
-    SDL_ReleaseGPUGraphicsPipeline(Device, scene_pipeline_);
-    SDL_Log("Released pipeline");
-  }
+  SDL_Log("Destroying app");
+  SDL_ReleaseGPUShader(Device, vertex_);
+  SDL_ReleaseGPUShader(Device, fragment_);
+  SDL_ReleaseGPUGraphicsPipeline(Device, scene_pipeline_);
+  SDL_ReleaseGPUGraphicsPipeline(Device, scene_wireframe_pipeline_);
+  SDL_ReleaseGPUTexture(Device, depth_texture_);
+  SDL_ReleaseGPUTexture(Device, color_texture_);
+  SDL_ReleaseGPUBuffer(Device, vbuffer_);
+  SDL_ReleaseGPUBuffer(Device, ibuffer_);
+  SDL_Log("Released GPU Resources");
+
+  SDL_WaitForGPUIdle(Device);
+  ImGui_ImplSDL3_Shutdown();
+  ImGui_ImplSDLGPU3_Shutdown();
+  ImGui::DestroyContext();
 }
 
 bool CubeProgram::Init() {
@@ -138,7 +159,14 @@ bool CubeProgram::Init() {
     SDL_Log("Couldn't create pipeline!");
     return false;
   }
-  SDL_Log("Created pipeline");
+  pipelineCreateInfo.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_LINE;
+  scene_wireframe_pipeline_ =
+      SDL_CreateGPUGraphicsPipeline(Device, &pipelineCreateInfo);
+  if (scene_wireframe_pipeline_ == NULL) {
+    SDL_Log("Couldn't create wireframe pipeline!");
+    return false;
+  }
+  SDL_Log("Created pipelines");
 
   if (!SendVertexData()) {
     SDL_Log("Couldn't send vertex data!");
@@ -152,8 +180,8 @@ bool CubeProgram::Init() {
   }
   SDL_Log("Created render target textures");
 
-  transform_.translation_ = {0.f, 0.f, 0.0f};
-  transform_.scale_ = {1.f, 1.f, 1.f};
+  cube_transform_.translation_ = {0.f, 0.f, 0.0f};
+  cube_transform_.scale_ = {1.f, 1.f, 1.f};
 
   camera_.Position = glm::vec3{0.f, 1.f, -4.f};
   camera_.Target = glm::vec3{0.f, 0.f, 0.f};
@@ -182,17 +210,21 @@ bool CubeProgram::Poll() {
 void CubeProgram::UpdateScene() {
   static float c = -1.f;
 
-  transform_.rotation_.y =
-      glm::mod(transform_.rotation_.y + DeltaTime, glm::two_pi<float>());
-  transform_.rotation_.x =
-      glm::mod(transform_.rotation_.x + DeltaTime, glm::two_pi<float>());
+  for (const auto &rot : rotations_) {
+    if (rot.speed != 0.f) {
+      *rot.axis =
+          glm::mod(*rot.axis + DeltaTime * rot.speed, glm::two_pi<float>());
+    }
+  }
+
   if (camera_.Position.z < -10.f) {
     c = 1.f;
   } else if (camera_.Position.z > -1.f) {
     c = -1.f;
   }
-  camera_.Position.z += c * DeltaTime * 2.5f;
-  camera_.Touched = true;
+  // camera_.Position.z += c * DeltaTime * 2.5f;
+  // camera_.Touched = true;
+  cube_transform_.Touched = true;
   camera_.Update();
 }
 
@@ -203,7 +235,7 @@ bool CubeProgram::Draw() {
   static const SDL_GPUBufferBinding iBinding{ibuffer_, 0};
 
   UpdateScene();
-  auto mvp = camera_.Projection() * camera_.View() * transform_.Matrix();
+  auto mvp = camera_.Projection() * camera_.View() * cube_transform_.Matrix();
   auto draw_data = DrawGui();
 
   SDL_GPUCommandBuffer *cmdbuf = SDL_AcquireGPUCommandBuffer(Device);
@@ -231,7 +263,8 @@ bool CubeProgram::Draw() {
     SDL_GPURenderPass *scenePass = SDL_BeginGPURenderPass(
         cmdbuf, &scene_color_target_info_, 1, &scene_depth_target_info_);
 
-    SDL_BindGPUGraphicsPipeline(scenePass, scene_pipeline_);
+    SDL_BindGPUGraphicsPipeline(
+        scenePass, wireframe_ ? scene_wireframe_pipeline_ : scene_pipeline_);
     SDL_BindGPUVertexBuffers(scenePass, 0, &vBinding, 1);
     SDL_BindGPUIndexBuffer(scenePass, &iBinding,
                            SDL_GPU_INDEXELEMENTSIZE_16BIT);
@@ -249,13 +282,6 @@ bool CubeProgram::Draw() {
 
   SDL_SubmitGPUCommandBuffer(cmdbuf);
   return true;
-}
-
-void CubeProgram::Quit() {
-  SDL_WaitForGPUIdle(Device);
-  ImGui_ImplSDL3_Shutdown();
-  ImGui_ImplSDLGPU3_Shutdown();
-  ImGui::DestroyContext();
 }
 
 bool CubeProgram::LoadShaders() {
@@ -418,10 +444,19 @@ ImDrawData *CubeProgram::DrawGui() {
 
     ImGui::ShowMetricsWindow();
 
-    if (ImGui::Begin("Camera")) {
-      if (ImGui::InputFloat3("position", (float *)&camera_.Position)) {
+    if (ImGui::Begin("Settings")) {
+      if (ImGui::SliderFloat3("Camera position",
+                              (float *)(void *)&camera_.Position, -40.f,
+                              40.f)) {
         camera_.Touched = true;
       }
+      if (ImGui::TreeNode("Spin Cube")) {
+        for (auto &rot : rotations_) {
+          ImGui::InputFloat(rot.name, &rot.speed);
+        }
+        ImGui::TreePop();
+      }
+      ImGui::Checkbox("Wireframe", &wireframe_);
       ImGui::End();
     }
   }

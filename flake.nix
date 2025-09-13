@@ -30,6 +30,7 @@
           lldb_20 # Debugger
           pre-commit
           gdbgui
+          valgrind
 
           # Shader stuff:
           glslang

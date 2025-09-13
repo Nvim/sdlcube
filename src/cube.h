@@ -11,6 +11,12 @@ typedef struct Vertex {
   float poscol[6];
 } Vertex;
 
+struct Rotation {
+  const char *name;
+  float *axis;
+  float speed;
+};
+
 class CubeProgram : public Program {
 public:
   CubeProgram(SDL_GPUDevice *device, SDL_Window *window,
@@ -18,7 +24,6 @@ public:
   bool Init() override;
   bool Poll() override;
   bool Draw() override;
-  void Quit() override;
   bool ShouldQuit() override;
   ~CubeProgram();
 
@@ -31,23 +36,31 @@ private:
   void UpdateScene();
 
 private:
+  // Internals:
   bool quit{false};
-  Transform transform_;
+  Transform cube_transform_;
   Camera camera_{glm::radians(60.0f), 640 / 480.f, .1f, 100.f};
   const char *vertex_path_;
   const char *fragment_path_;
+  const int vp_width_{640};
+  const int vp_height_{480};
+
+  // User controls:
+  Rotation rotations_[3]; // spin cube
+  bool wireframe_{false};
+
+  // GPU Resources:
   SDL_GPUTexture *depth_texture_;
   SDL_GPUTexture *color_texture_;
   SDL_GPUShader *vertex_{nullptr};
   SDL_GPUShader *fragment_{nullptr};
   SDL_GPUGraphicsPipeline *scene_pipeline_{nullptr};
+  SDL_GPUGraphicsPipeline *scene_wireframe_pipeline_{nullptr};
   SDL_GPUBuffer *vbuffer_;
   SDL_GPUBuffer *ibuffer_;
   SDL_GPUColorTargetInfo scene_color_target_info_{};
   SDL_GPUDepthStencilTargetInfo scene_depth_target_info_{};
   SDL_GPUColorTargetInfo swapchain_target_info_{};
-  const int vp_width_{640};
-  const int vp_height_{480};
 
 #define RED 1.0, 0.0, 0.0
 #define GREEN 0.0, 1.0, 0.0

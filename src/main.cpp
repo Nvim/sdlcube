@@ -36,41 +36,42 @@ int main() {
   }
   SDL_Log("GPU claimed Window");
 
-  CubeProgram app{Device,
-                  Window,
-                  "resources/shaders/compiled/vert.spv",
-                  "resources/shaders/compiled/frag.spv",
-                  1200,
-                  900};
+  { // app lifecycle
+    CubeProgram app{Device,
+                    Window,
+                    "resources/shaders/compiled/vert.spv",
+                    "resources/shaders/compiled/frag.spv",
+                    1200,
+                    900};
 
-  if (!app.Init()) {
-    SDL_Log("Couldn't init app.");
-    SDL_ReleaseWindowFromGPUDevice(Device, Window);
-    SDL_DestroyWindow(Window);
-    SDL_DestroyGPUDevice(Device);
-    return -1;
-  }
+    if (!app.Init()) {
+      SDL_Log("Couldn't init app.");
+      SDL_ReleaseWindowFromGPUDevice(Device, Window);
+      SDL_DestroyWindow(Window);
+      SDL_DestroyGPUDevice(Device);
+      return -1;
+    }
 
-  while (!app.ShouldQuit()) {
-    if (!app.Poll()) {
-      SDL_Log("App failed to Poll");
-      break;
+    while (!app.ShouldQuit()) {
+      if (!app.Poll()) {
+        SDL_Log("App failed to Poll");
+        break;
+      }
+      app.UpdateTime();
+      if (app.ShouldQuit()) {
+        break;
+      }
+      if (!app.Draw()) {
+        SDL_Log("App failed to draw");
+        break;
+      };
     }
-    app.UpdateTime();
-    if (app.ShouldQuit()) {
-      break;
-    }
-    if (!app.Draw()) {
-      SDL_Log("App failed to draw");
-      break;
-    };
   }
-  app.Quit();
 
   SDL_Log("Releasing resources..");
   SDL_ReleaseWindowFromGPUDevice(Device, Window);
-  SDL_DestroyWindow(Window);
   SDL_DestroyGPUDevice(Device);
+  SDL_DestroyWindow(Window);
 
   SDL_Log("Cleanup done");
   return 0;
