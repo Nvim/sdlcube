@@ -1,11 +1,16 @@
 #include "util.h"
+
 #include <SDL3/SDL.h>
+#include <SDL3_image/SDL_image.h>
 
-SDL_GPUShader *LoadShader(const char *path, SDL_GPUDevice *device,
-                          Uint32 samplerCount, Uint32 uniformBufferCount,
-                          Uint32 storageBufferCount,
-                          Uint32 storageTextureCount) {
-
+SDL_GPUShader*
+LoadShader(const char* path,
+           SDL_GPUDevice* device,
+           Uint32 samplerCount,
+           Uint32 uniformBufferCount,
+           Uint32 storageBufferCount,
+           Uint32 storageTextureCount)
+{
   SDL_GPUShaderStage stage;
   if (SDL_strstr(path, "vert")) {
     stage = SDL_GPU_SHADERSTAGE_VERTEX;
@@ -16,26 +21,26 @@ SDL_GPUShader *LoadShader(const char *path, SDL_GPUDevice *device,
     return NULL;
   }
   size_t codeSize;
-  void *code = SDL_LoadFile(path, &codeSize);
+  void* code = SDL_LoadFile(path, &codeSize);
   if (code == NULL) {
     SDL_Log("Failed to load shader from disk! %s", path);
     return NULL;
   }
 
   SDL_GPUShaderCreateInfo shaderInfo = {
-      .code_size = codeSize,
-      .code = (Uint8 *)code,
-      .entrypoint = "main",
-      .format = SDL_GPU_SHADERFORMAT_SPIRV,
-      .stage = stage,
-      .num_samplers = samplerCount,
-      .num_storage_textures = storageTextureCount,
-      .num_storage_buffers = storageBufferCount,
-      .num_uniform_buffers = uniformBufferCount,
-      .props = 0,
+    .code_size = codeSize,
+    .code = (Uint8*)code,
+    .entrypoint = "main",
+    .format = SDL_GPU_SHADERFORMAT_SPIRV,
+    .stage = stage,
+    .num_samplers = samplerCount,
+    .num_storage_textures = storageTextureCount,
+    .num_storage_buffers = storageBufferCount,
+    .num_uniform_buffers = uniformBufferCount,
+    .props = 0,
   };
 
-  SDL_GPUShader *shader = SDL_CreateGPUShader(device, &shaderInfo);
+  SDL_GPUShader* shader = SDL_CreateGPUShader(device, &shaderInfo);
   if (shader == NULL) {
     SDL_Log("Failed to create shader!");
     SDL_free(code);
@@ -44,4 +49,30 @@ SDL_GPUShader *LoadShader(const char *path, SDL_GPUDevice *device,
 
   SDL_free(code);
   return shader;
+}
+
+SDL_Surface*
+LoadImage(const char* path)
+{
+  // char fullPath[256];
+  SDL_Surface* result;
+  SDL_PixelFormat format;
+
+  // SDL_snprintf(
+  //   fullPath, sizeof(fullPath), "%sContent/Images/%s", BasePath,
+  //   imageFilename);
+
+  result = IMG_Load(path);
+  if (result == NULL) {
+    return NULL;
+  }
+
+  format = SDL_PIXELFORMAT_ABGR8888;
+  if (result->format != format) {
+    SDL_Surface* next = SDL_ConvertSurface(result, format);
+    SDL_DestroySurface(result);
+    result = next;
+  }
+
+  return result;
 }

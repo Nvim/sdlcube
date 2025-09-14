@@ -5,22 +5,25 @@
 
 // Program uses SDL GPU and Window to draw, but isn't responsible for
 // creating/releasing them.
-class Program {
+class Program
+{
 public:
-  SDL_GPUDevice *Device;
-  SDL_Window *Window;
-  float DeltaTime{0.0f};
-  float lastTime{0.0f};
+  SDL_GPUDevice* Device;
+  SDL_Window* Window;
+  float DeltaTime{ 0.0f };
+  float lastTime{ 0.0f };
   ~Program() {};
 
 public:
-  Program(SDL_GPUDevice *device, SDL_Window *window)
-      : Device{device}, Window{window} {};
+  Program(SDL_GPUDevice* device, SDL_Window* window)
+    : Device{ device }
+    , Window{ window } {};
   virtual bool Init() = 0;
   virtual bool Poll() = 0;
   virtual bool Draw() = 0;
   virtual bool ShouldQuit() = 0;
-  void UpdateTime() {
+  void UpdateTime()
+  {
     float newTime = SDL_GetTicks() / 1000.0f;
     DeltaTime = newTime - lastTime;
     lastTime = newTime;

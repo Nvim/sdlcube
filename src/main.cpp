@@ -1,10 +1,13 @@
-#include "cube.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_keycode.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_video.h>
 
-int main() {
+#include "cube.h"
+
+int
+main()
+{
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
     SDL_Log("Failed to initialize SDL: %s", SDL_GetError());
     return 1;
@@ -12,10 +15,11 @@ int main() {
 
   SDL_Log("Initialized SDL");
 
-  auto Device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV |
-                                        SDL_GPU_SHADERFORMAT_DXIL |
-                                        SDL_GPU_SHADERFORMAT_MSL,
-                                    true, NULL);
+  auto Device =
+    SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL |
+                          SDL_GPU_SHADERFORMAT_MSL,
+                        true,
+                        NULL);
 
   if (Device == NULL) {
     SDL_Log("GPUCreateDevice failed");
@@ -37,12 +41,12 @@ int main() {
   SDL_Log("GPU claimed Window");
 
   { // app lifecycle
-    CubeProgram app{Device,
-                    Window,
-                    "resources/shaders/compiled/vert.spv",
-                    "resources/shaders/compiled/frag.spv",
-                    1200,
-                    900};
+    CubeProgram app{ Device,
+                     Window,
+                     "resources/shaders/compiled/vert.spv",
+                     "resources/shaders/compiled/frag.spv",
+                     1200,
+                     900 };
 
     if (!app.Init()) {
       SDL_Log("Couldn't init app.");

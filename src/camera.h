@@ -2,7 +2,8 @@
 
 #include <glm/glm.hpp>
 
-class Camera {
+class Camera
+{
 public:
   // clang-format off
   Camera(
@@ -14,13 +15,13 @@ public:
   );
   // clang-format on
   void Update();
-  const glm::mat4 &Projection() const { return proj_; }
-  const glm::mat4 &View() const { return view_; }
+  const glm::mat4& Projection() const { return proj_; }
+  const glm::mat4& View() const { return view_; }
 
 public:
-  glm::vec3 Position{0.f, 0.f, 4.f};
-  glm::vec3 Target{0.f};
-  bool Touched{true};
+  glm::vec3 Position{ 0.f, 0.f, 4.f };
+  glm::vec3 Target{ 0.f };
+  bool Touched{ true };
 
 private:
   glm::mat4 proj_;

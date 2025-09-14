@@ -8,6 +8,7 @@ target_include_directories(cxx_setup INTERFACE ${PROJECT_SOURCE_DIR})
 target_compile_options(cxx_setup INTERFACE -Wall -Wpedantic -Wextra)
 
 find_package(SDL3 REQUIRED)
+find_package(SDL3_image REQUIRED)
 find_package(glm REQUIRED)
 
 add_library(imgui)
@@ -20,8 +21,8 @@ target_sources(imgui PRIVATE
 "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/imgui_widgets.cpp"
 "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/backends/imgui_impl_sdlgpu3.cpp"
 "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/backends/imgui_impl_sdl3.cpp"
-# "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/backends/imgui_impl_vulkan.cpp"
 )
+
 target_link_libraries(imgui PUBLIC SDL3::SDL3)
 
 add_executable(${PROJECT_NAME})
@@ -30,4 +31,4 @@ target_sources(${PROJECT_NAME} PRIVATE ${SOURCES})
 target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty")
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
-target_link_libraries(${PROJECT_NAME} PUBLIC SDL3::SDL3 glm::glm imgui cxx_setup)
+target_link_libraries(${PROJECT_NAME} PUBLIC SDL3_image::SDL3_image SDL3::SDL3 glm::glm imgui cxx_setup)
