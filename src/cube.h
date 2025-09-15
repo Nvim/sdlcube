@@ -26,6 +26,18 @@ struct Rotation
   float speed;
 };
 
+struct MatricesBinding
+{
+  glm::mat4 vp;
+  glm::mat4 m;
+};
+
+struct InstancingCfg
+{
+  float spread = 5.f;   // gap between each mesh instance
+  Uint32 dimension = 5; // instance count per side
+};
+
 class CubeProgram : public Program
 {
 public:
@@ -62,6 +74,7 @@ private:
 
   // User controls:
   Rotation rotations_[3]; // spin cube
+  InstancingCfg instance_cfg{};
   bool wireframe_{ false };
 
   // GPU Resources:
@@ -125,35 +138,35 @@ private:
   };
 
   static constexpr PosUvVertex verts_uvs[VERT_COUNT] = {
-		{ {-1.f, -1.f, -1.f}, {0.f, 0.f}},
-		{ { 1.f, -1.f, -1.f}, {1.f, 0.f}},
-		{ { 1.f,  1.f, -1.f}, {1.f, 1.f}},
-		{ {-1.f,  1.f, -1.f}, {0.f, 1.f}},
-
 		{ {-1.f, -1.f, 1.f},  {0.f, 0.f}},
 		{ { 1.f, -1.f, 1.f},  {1.f, 0.f}},
 		{ { 1.f,  1.f, 1.f},  {1.f, 1.f}},
 		{ {-1.f,  1.f, 1.f},  {0.f, 1.f}},
 
+		{ { 1.f, -1.f, -1.f}, {0.f, 0.f}},
+		{ {-1.f, -1.f, -1.f}, {1.f, 0.f}},
+		{ {-1.f,  1.f, -1.f}, {1.f, 1.f}},
+		{ { 1.f,  1.f, -1.f}, {0.f, 1.f}},
+
 		{ {-1.f, -1.f, -1.f}, {0.f, 0.f}},
-		{ {-1.f,  1.f, -1.f}, {1.f, 0.f}},
+		{ {-1.f, -1.f,  1.f}, {1.f, 0.f}},
     { {-1.f,  1.f,  1.f}, {1.f, 1.f}},
-		{ {-1.f, -1.f,  1.f}, {0.f, 1.f}},
+		{ {-1.f,  1.f, -1.f}, {0.f, 1.f}},
 
     { {1.f, -1.f, -1.f},  {0.f, 0.f}},
-    { {1.f,  1.f, -1.f},  {1.f, 0.f}},
+    { {1.f, -1.f,  1.f},  {1.f, 0.f}},
     { {1.f,  1.f,  1.f},  {1.f, 1.f}},
-    { {1.f, -1.f,  1.f},  {0.f, 1.f}},
+    { {1.f,  1.f, -1.f},  {0.f, 1.f}},
 
-    { {-1.f, -1.f, -1.f}, {0.f, 0.f}},
-    { {-1.f, -1.f,  1.f}, {1.f, 0.f}},
-    { { 1.f, -1.f,  1.f}, {1.f, 1.f}},
-    { { 1.f, -1.f, -1.f}, {0.f, 1.f}},
+    { {-1.f, 1.f, -1.f}, {0.f, 0.f}},
+    { { 1.f, 1.f, -1.f}, {1.f, 0.f}},
+    { { 1.f, 1.f,  1.f}, {1.f, 1.f}},
+    { {-1.f, 1.f,  1.f}, {0.f, 1.f}},
 
-    { {-1.f, 1.f, -1.f},  {0.f, 0.f}},
-    { {-1.f, 1.f,  1.f},  {1.f, 0.f}},
-    { { 1.f, 1.f,  1.f},  {1.f, 1.f}},
-    { { 1.f, 1.f, -1.f},  {0.f, 1.f}},
+    { { 1.f, -1.f, -1.f}, {0.f, 0.f}},
+    { {-1.f, -1.f, -1.f}, {1.f, 0.f}},
+    { {-1.f, -1.f,  1.f}, {1.f, 1.f}},
+    { { 1.f, -1.f,  1.f}, {0.f, 1.f}},
   };
 
   static constexpr Uint8 INDEX_COUNT = 36;

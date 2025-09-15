@@ -263,11 +263,6 @@ CubeProgram::Draw()
   };
   static const SDL_GPUBufferBinding vBinding{ vbuffer_, 0 };
   static const SDL_GPUBufferBinding iBinding{ ibuffer_, 0 };
-  static SDL_GPUTextureSamplerBinding sampler_bind{ cube_tex_, cube_sampler_ };
-
-  UpdateScene();
-  auto mvp = camera_.Projection() * camera_.View() * cube_transform_.Matrix();
-  auto draw_data = DrawGui();
 
   SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(Device);
   if (cmdbuf == NULL) {
@@ -281,38 +276,50 @@ CubeProgram::Draw()
     SDL_Log("WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
     return false;
   }
-  if (swapchainTexture != NULL) {
+  if (swapchainTexture == NULL) {
+    SDL_SubmitGPUCommandBuffer(cmdbuf);
+    return true;
+  }
 
-    ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmdbuf);
-    SDL_PushGPUVertexUniformData(cmdbuf, 0, &mvp, sizeof(glm::mat4));
+  UpdateScene(); // TODO: move out
+  static SDL_GPUTextureSamplerBinding sampler_bind{ cube_tex_, cube_sampler_ };
+  MatricesBinding mvp{ camera_.Projection() * camera_.View(),
+                       cube_transform_.Matrix() };
+  auto draw_data = DrawGui();
+  auto d = instance_cfg.dimension;
+  auto total_instances = d * d * d;
 
-    // Scene Pass
-    {
-      scene_color_target_info_.texture = color_target_;
-      scene_depth_target_info_.texture = depth_target_;
-      SDL_GPURenderPass* scenePass = SDL_BeginGPURenderPass(
-        cmdbuf, &scene_color_target_info_, 1, &scene_depth_target_info_);
+  ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmdbuf);
+  SDL_PushGPUVertexUniformData(cmdbuf, 0, &mvp, sizeof(mvp));
+  SDL_PushGPUVertexUniformData(cmdbuf, 1, &instance_cfg, sizeof(instance_cfg));
 
-      SDL_BindGPUGraphicsPipeline(
-        scenePass, wireframe_ ? scene_wireframe_pipeline_ : scene_pipeline_);
-      SDL_BindGPUVertexBuffers(scenePass, 0, &vBinding, 1);
-      SDL_BindGPUIndexBuffer(
-        scenePass, &iBinding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
-      SDL_BindGPUFragmentSamplers(scenePass, 0, &sampler_bind, 1);
-      SDL_SetGPUViewport(scenePass, &scene_vp);
-      SDL_DrawGPUIndexedPrimitives(scenePass, INDEX_COUNT, 1, 0, 0, 0);
-      SDL_EndGPURenderPass(scenePass);
-    }
+  // Scene Pass
+  {
+    scene_color_target_info_.texture = color_target_;
+    scene_depth_target_info_.texture = depth_target_;
+    SDL_GPURenderPass* scenePass = SDL_BeginGPURenderPass(
+      cmdbuf, &scene_color_target_info_, 1, &scene_depth_target_info_);
 
-    // GUI Pass
-    {
-      swapchain_target_info_.texture = swapchainTexture;
-      SDL_GPURenderPass* guiPass =
-        SDL_BeginGPURenderPass(cmdbuf, &swapchain_target_info_, 1, nullptr);
+    SDL_BindGPUGraphicsPipeline(
+      scenePass, wireframe_ ? scene_wireframe_pipeline_ : scene_pipeline_);
+    SDL_BindGPUVertexBuffers(scenePass, 0, &vBinding, 1);
+    SDL_BindGPUIndexBuffer(
+      scenePass, &iBinding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+    SDL_BindGPUFragmentSamplers(scenePass, 0, &sampler_bind, 1);
+    SDL_SetGPUViewport(scenePass, &scene_vp);
+    SDL_DrawGPUIndexedPrimitives(
+      scenePass, INDEX_COUNT, total_instances, 0, 0, 0);
+    SDL_EndGPURenderPass(scenePass);
+  }
 
-      ImGui_ImplSDLGPU3_RenderDrawData(draw_data, cmdbuf, guiPass);
-      SDL_EndGPURenderPass(guiPass);
-    }
+  // GUI Pass
+  {
+    swapchain_target_info_.texture = swapchainTexture;
+    SDL_GPURenderPass* guiPass =
+      SDL_BeginGPURenderPass(cmdbuf, &swapchain_target_info_, 1, nullptr);
+
+    ImGui_ImplSDLGPU3_RenderDrawData(draw_data, cmdbuf, guiPass);
+    SDL_EndGPURenderPass(guiPass);
   }
 
   SDL_SubmitGPUCommandBuffer(cmdbuf);
@@ -322,7 +329,7 @@ CubeProgram::Draw()
 bool
 CubeProgram::LoadShaders()
 {
-  vertex_ = LoadShader(vertex_path_, Device, 0, 0, 0, 0);
+  vertex_ = LoadShader(vertex_path_, Device, 0, 2, 0, 0);
   if (vertex_ == nullptr) {
     SDL_Log("Couldn't load vertex shader at path %s", vertex_path_);
     return false;
@@ -554,14 +561,23 @@ CubeProgram::DrawGui()
     ImGui::ShowMetricsWindow();
 
     if (ImGui::Begin("Settings")) {
-      if (ImGui::SliderFloat3(
-            "Camera position", (float*)(void*)&camera_.Position, -40.f, 40.f)) {
-        camera_.Touched = true;
+      if (ImGui::TreeNode("Camera")) {
+        if (ImGui::SliderFloat("X", (float*)&camera_.Position.x, -50.f, 50.f) ||
+            ImGui::SliderFloat("Y", (float*)&camera_.Position.y, -50.f, 50.f) ||
+            ImGui::SliderFloat("Z", (float*)&camera_.Position.z, -50.f, 50.f)) {
+          camera_.Touched = true;
+        }
+        ImGui::TreePop();
       }
       if (ImGui::TreeNode("Spin Cube")) {
         for (auto& rot : rotations_) {
           ImGui::InputFloat(rot.name, &rot.speed);
         }
+        ImGui::TreePop();
+      }
+      if (ImGui::TreeNode("Instancing")) {
+        ImGui::InputFloat("Spread", &instance_cfg.spread);
+        ImGui::InputInt("Dimensions", (int*)&instance_cfg.dimension);
         ImGui::TreePop();
       }
       ImGui::Checkbox("Wireframe", &wireframe_);

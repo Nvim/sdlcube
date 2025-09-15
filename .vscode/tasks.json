@@ -5,7 +5,15 @@
       "type": "shell",
       "label": "Clean, build, and run",
       "dependsOrder": "sequence",
-      "dependsOn": ["Clean", "Build", "Build Shaders", "Run"]
+      "command": "build/sdlcube",
+      "dependsOn": ["Clean", "Build", "Build Shaders"]
+    },
+    {
+      "type": "shell",
+      "label": "Build shaders + program, and run",
+      "dependsOrder": "sequence",
+      "command": "build/sdlcube",
+      "dependsOn": ["Build Shaders", "Build"]
     },
     {
       "type": "shell",
