@@ -4,6 +4,7 @@
 #include <SDL3/SDL_video.h>
 
 #include "cube.h"
+#include "src/skybox.h"
 
 int
 main()
@@ -50,25 +51,22 @@ main()
 
     if (!app.Init()) {
       SDL_Log("Couldn't init app.");
-      SDL_ReleaseWindowFromGPUDevice(Device, Window);
-      SDL_DestroyWindow(Window);
-      SDL_DestroyGPUDevice(Device);
-      return -1;
-    }
+    } else {
 
-    while (!app.ShouldQuit()) {
-      if (!app.Poll()) {
-        SDL_Log("App failed to Poll");
-        break;
+      while (!app.ShouldQuit()) {
+        if (!app.Poll()) {
+          SDL_Log("App failed to Poll");
+          break;
+        }
+        app.UpdateTime();
+        if (app.ShouldQuit()) {
+          break;
+        }
+        if (!app.Draw()) {
+          SDL_Log("App failed to draw");
+          break;
+        };
       }
-      app.UpdateTime();
-      if (app.ShouldQuit()) {
-        break;
-      }
-      if (!app.Draw()) {
-        SDL_Log("App failed to draw");
-        break;
-      };
     }
   }
 

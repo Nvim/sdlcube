@@ -1,0 +1,308 @@
+#include "skybox.h"
+#include "util.h"
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_assert.h>
+#include <SDL3/SDL_gpu.h>
+#include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL_surface.h>
+#include <algorithm>
+#include <cassert>
+#include <cstdio>
+#include <initializer_list>
+#include <vector>
+
+Skybox::Skybox(const char* dir, SDL_Window* window, SDL_GPUDevice* device)
+  : dir_{ dir }
+  , device_{ device }
+  , window_{ window }
+{
+  if (!Init()) {
+    SDL_Log("Skybox initialization failed");
+  }
+}
+
+Skybox::Skybox(const char* dir,
+               const char* vert_path,
+               const char* frag_path,
+               SDL_Window* window,
+               SDL_GPUDevice* device)
+  : VertPath{ vert_path }
+  , FragPath{ frag_path }
+  , dir_{ dir }
+  , device_{ device }
+  , window_{ window }
+{
+  if (!Init()) {
+    SDL_Log("Skybox initialization failed");
+  }
+}
+
+Skybox::~Skybox()
+{
+  // for (const auto tx : faces) {
+  //   SDL_ReleaseGPUTexture(device_, tx);
+  // }
+  // SDL_ReleaseGPUTexture(device_, Cubemap);
+  // SDL_ReleaseGPUSampler(device_, CubemapSampler);
+  // SDL_ReleaseGPUGraphicsPipeline(device_, Pipeline);
+}
+
+bool
+Skybox::Init()
+{
+  if (!CreatePipeline()) {
+    SDL_Log("Couldn't create skybox pipeline");
+    return false;
+  }
+  VertexBuffer = SDL_CreateGPUBuffer(
+    device_,
+    std::initializer_list<SDL_GPUBufferCreateInfo>{
+      { .usage = SDL_GPU_BUFFERUSAGE_VERTEX, .size = sizeof(PosVertex) * 24 } }
+      .begin());
+
+  IndexBuffer = SDL_CreateGPUBuffer(
+    device_,
+    std::initializer_list<SDL_GPUBufferCreateInfo>{
+      { .usage = SDL_GPU_BUFFERUSAGE_INDEX, .size = sizeof(Uint16) * 36 } }
+      .begin());
+
+  CubemapSampler = SDL_CreateGPUSampler(
+    device_,
+    std::initializer_list<SDL_GPUSamplerCreateInfo>{
+      {
+        .min_filter = SDL_GPU_FILTER_NEAREST,
+        .mag_filter = SDL_GPU_FILTER_NEAREST,
+        .mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
+        .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+        .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+        .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+      } }
+      .begin());
+
+  if (!SendVertexData()) {
+    SDL_Log("couldn't send skybox vertex data");
+    return false;
+  }
+
+  if (!LoadTextures()) {
+    SDL_Log("couldn't load skybox textures");
+    return false;
+  }
+
+  loaded_ = true;
+  return loaded_;
+}
+
+bool
+Skybox::CreatePipeline()
+{
+  auto vert = LoadShader(VertPath, device_, 0, 2, 0, 0);
+  if (vert == nullptr) {
+    SDL_Log("Couldn't load vertex shader at path %s", VertPath);
+    return false;
+  }
+  auto frag = LoadShader(FragPath, device_, 1, 1, 0, 0);
+  if (frag == nullptr) {
+    SDL_Log("Couldn't load fragment shader at path %s", FragPath);
+    return false;
+  }
+
+  SDL_GPUColorTargetDescription col_desc[] = { {
+    .format = SDL_GetGPUSwapchainTextureFormat(device_, window_),
+  } };
+  if (col_desc[0].format == SDL_GPU_TEXTUREFORMAT_INVALID) {
+    SDL_Log("no swapchain format");
+    return false;
+  }
+  SDL_GPUVertexBufferDescription vert_desc[] = {
+    { .slot = 0,
+      .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+      .instance_step_rate = 0,
+      .pitch = sizeof(PosVertex) }
+  };
+  SDL_GPUVertexAttribute vert_attr[] = { { .buffer_slot = 0,
+                                           .format =
+                                             SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+                                           .location = 0,
+                                           .offset = 0 } };
+
+  SDL_GPUGraphicsPipelineCreateInfo pipelineCreateInfo = {
+  	.vertex_shader = vert,
+  	.fragment_shader = frag,
+     .vertex_input_state = {
+       .vertex_buffer_descriptions = vert_desc,
+       .num_vertex_buffers = 1,
+       .vertex_attributes = vert_attr,
+       .num_vertex_attributes = 1,
+     },
+     .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+  	.target_info = {
+       .color_target_descriptions = col_desc,
+  		.num_color_targets = 1,
+  	},
+  };
+
+  Pipeline = SDL_CreateGPUGraphicsPipeline(device_, &pipelineCreateInfo);
+
+  SDL_ReleaseGPUShader(device_, vert);
+  SDL_ReleaseGPUShader(device_, frag);
+
+  return Pipeline != nullptr;
+}
+
+bool
+Skybox::SendVertexData() const
+{
+  Uint32 sz = (sizeof(PosVertex) * 24) + (sizeof(Uint16) * 36);
+  SDL_GPUTransferBufferCreateInfo trInfo{ SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+                                          sz };
+  SDL_GPUTransferBuffer* trBuf = SDL_CreateGPUTransferBuffer(device_, &trInfo);
+
+  { // Transfer buffer
+    PosVertex* transferData =
+      (PosVertex*)SDL_MapGPUTransferBuffer(device_, trBuf, false);
+    Uint16* indexData = (Uint16*)&transferData[24];
+
+    SDL_memcpy(transferData, verts_uvs, sizeof(verts_uvs));
+    SDL_memcpy(indexData, indices, sizeof(indices));
+    SDL_UnmapGPUTransferBuffer(device_, trBuf);
+  }
+
+  SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(device_);
+
+  { // Copy pass
+    SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmdbuf);
+
+    SDL_GPUTransferBufferLocation trLoc{ trBuf, 0 };
+    SDL_GPUBufferRegion vBufReg{ VertexBuffer, 0, sizeof(PosVertex) * 24 };
+    SDL_GPUBufferRegion iBufReg{ IndexBuffer, 0, sizeof(Uint16) * 36 };
+
+    SDL_UploadToGPUBuffer(copyPass, &trLoc, &vBufReg, false);
+    trLoc.offset = vBufReg.size;
+    SDL_UploadToGPUBuffer(copyPass, &trLoc, &iBufReg, false);
+    SDL_EndGPUCopyPass(copyPass);
+  }
+
+  SDL_ReleaseGPUTransferBuffer(device_, trBuf);
+  return SDL_SubmitGPUCommandBuffer(cmdbuf);
+}
+
+bool
+Skybox::LoadTextures()
+{
+  std::vector<SDL_Surface*> imgs;
+  { // Load all faces in memory
+    for (int i = 0; i < 6; ++i) {
+      char pth[256];
+      snprintf(pth, 256, "%s/%s", dir_, paths[i]);
+      auto img = LoadImage(pth);
+      if (!img) {
+        SDL_Log("couldn't load skybox texture: %s", SDL_GetError());
+        for (int j = 0; j < i; ++j) {
+          SDL_DestroySurface(imgs[j]);
+        }
+        return false;
+      }
+      imgs.push_back(img);
+    }
+  }
+  auto freeImg = [](SDL_Surface* i) { SDL_DestroySurface(i); };
+  Uint32 bytes_per_px =
+    SDL_GetPixelFormatDetails(imgs[0]->format)->bytes_per_pixel;
+  SDL_assert(bytes_per_px == 4);
+  Uint32 imgW = imgs[0]->w;
+  Uint32 imgH = imgs[0]->h;
+  Uint32 imgSz = imgs[0]->h * imgs[0]->w * bytes_per_px;
+
+  SDL_GPUTransferBufferCreateInfo info{ .usage =
+                                          SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+                                        .size = imgSz * 6 };
+  SDL_GPUTransferBuffer* textureTransferBuffer =
+    SDL_CreateGPUTransferBuffer(device_, &info);
+
+  if (!textureTransferBuffer) {
+    std::for_each(imgs.begin(), imgs.end(), freeImg);
+    SDL_Log("couldn't create GPU transfer buffer");
+    return false;
+  }
+
+  { // Map transfer buffer and memcpy data
+    Uint8* textureTransferPtr =
+      (Uint8*)SDL_MapGPUTransferBuffer(device_, textureTransferBuffer, false);
+    if (!textureTransferPtr) {
+      std::for_each(imgs.begin(), imgs.end(), freeImg);
+      SDL_ReleaseGPUTransferBuffer(device_, textureTransferBuffer);
+      SDL_Log("couldn't get transfer buffer mapping");
+      return false;
+    }
+    for (int i = 0; i < 6; ++i) {
+      const auto& img = imgs[i];
+      SDL_memcpy(textureTransferPtr + (imgSz * i), img->pixels, imgSz);
+      SDL_DestroySurface(img); // don't need this anymore
+    }
+    SDL_UnmapGPUTransferBuffer(device_, textureTransferBuffer);
+  }
+
+  { // Create cubemap with right dimensions now that we got image size
+    SDL_GPUTextureCreateInfo cubeMapInfo{
+      .type = SDL_GPU_TEXTURETYPE_CUBE,
+      .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+      .width = imgW,
+      .height = imgH,
+      .layer_count_or_depth = 6,
+      .num_levels = 1,
+      .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER
+    };
+    Cubemap = SDL_CreateGPUTexture(device_, &cubeMapInfo);
+    if (!Cubemap) {
+      SDL_ReleaseGPUTransferBuffer(device_, textureTransferBuffer);
+      SDL_Log("couldn't create cubemap texture");
+      return false;
+    }
+  }
+
+  { // Copy pass transfer buffer to GPU
+    SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(device_);
+    if (!cmdbuf) {
+      SDL_ReleaseGPUTransferBuffer(device_, textureTransferBuffer);
+      SDL_Log("couldn't get command buffer for textures copy pass");
+      return false;
+    }
+
+    SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmdbuf);
+
+    for (Uint32 i = 0; i < 6; i += 1) {
+      SDL_GPUTextureTransferInfo trInfo{ .transfer_buffer =
+                                           textureTransferBuffer,
+                                         .offset = imgSz * i };
+      SDL_GPUTextureRegion texReg{
+        .texture = Cubemap,
+        .layer = i,
+        .w = imgW,
+        .h = imgH,
+        .d = 1,
+      };
+      SDL_UploadToGPUTexture(copyPass, &trInfo, &texReg, false);
+    }
+    SDL_EndGPUCopyPass(copyPass);
+    SDL_SubmitGPUCommandBuffer(cmdbuf);
+  }
+
+  SDL_ReleaseGPUTransferBuffer(device_, textureTransferBuffer);
+  SDL_Log("Loaded skybox textures");
+  return true;
+}
+
+void
+Skybox::Draw(SDL_GPURenderPass* pass) const
+{
+  static const SDL_GPUTextureSamplerBinding texBind{ Cubemap, CubemapSampler };
+  static const SDL_GPUBufferBinding vBufBind{ VertexBuffer, 0 };
+  static const SDL_GPUBufferBinding iBufBind{ IndexBuffer, 0 };
+
+  SDL_BindGPUGraphicsPipeline(pass, Pipeline);
+  SDL_BindGPUVertexBuffers(pass, 0, &vBufBind, 1);
+  SDL_BindGPUIndexBuffer(pass, &iBufBind, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+  SDL_BindGPUFragmentSamplers(pass, 0, &texBind, 1);
+  SDL_DrawGPUIndexedPrimitives(pass, 36, 1, 0, 0, 0);
+}

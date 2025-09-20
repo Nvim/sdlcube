@@ -9,10 +9,15 @@ layout(std140, binding=0, set=1) uniform uMatrices {
   mat4 mat_m;
 } mvp;
 
-layout(std140, binding=1, set=1) uniform uInstanceSettings {
+layout(std140, binding=1, set=1) uniform uCameraMatrix {
+  mat4 mat_cam;
+};
+
+layout(std140, binding=2, set=1) uniform uInstanceSettings {
   float spread;
   uint dimension;
 };
+
 
 void main()
 {

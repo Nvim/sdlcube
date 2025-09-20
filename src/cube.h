@@ -6,18 +6,9 @@
 
 #include "camera.h"
 #include "program.h"
+#include "skybox.h"
 #include "transform.h"
-
-struct PosColVertex
-{
-  float poscol[6];
-};
-
-struct PosUvVertex
-{
-  float pos[3];
-  float uv[2];
-};
+#include "util.h"
 
 struct Rotation
 {
@@ -28,8 +19,9 @@ struct Rotation
 
 struct MatricesBinding
 {
-  glm::mat4 vp;
-  glm::mat4 m;
+  glm::mat4 viewProj;
+  glm::mat4 objModel;
+  // glm::mat4 cameraModel;
 };
 
 struct InstancingCfg
@@ -67,6 +59,7 @@ private:
   bool quit{ false };
   Transform cube_transform_;
   Camera camera_{ glm::radians(60.0f), 640 / 480.f, .1f, 100.f };
+  Skybox skybox_{ "resources/textures/skybox", Window, Device };
   const char* vertex_path_;
   const char* fragment_path_;
   const int vp_width_{ 640 };
@@ -78,16 +71,16 @@ private:
   bool wireframe_{ false };
 
   // GPU Resources:
-  SDL_GPUTexture* depth_target_;
-  SDL_GPUTexture* color_target_;
-  SDL_GPUTexture* cube_tex_;
-  SDL_GPUSampler* cube_sampler_;
+  SDL_GPUTexture* depth_target_{ nullptr };
+  SDL_GPUTexture* color_target_{ nullptr };
+  SDL_GPUTexture* cube_tex_{ nullptr };
+  SDL_GPUSampler* cube_sampler_{ nullptr };
   SDL_GPUShader* vertex_{ nullptr };
   SDL_GPUShader* fragment_{ nullptr };
   SDL_GPUGraphicsPipeline* scene_pipeline_{ nullptr };
   SDL_GPUGraphicsPipeline* scene_wireframe_pipeline_{ nullptr };
-  SDL_GPUBuffer* vbuffer_;
-  SDL_GPUBuffer* ibuffer_;
+  SDL_GPUBuffer* vbuffer_{ nullptr };
+  SDL_GPUBuffer* ibuffer_{ nullptr };
   SDL_GPUColorTargetInfo scene_color_target_info_{};
   SDL_GPUDepthStencilTargetInfo scene_depth_target_info_{};
   SDL_GPUColorTargetInfo swapchain_target_info_{};

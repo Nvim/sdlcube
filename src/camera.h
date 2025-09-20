@@ -17,6 +17,7 @@ public:
   void Update();
   const glm::mat4& Projection() const { return proj_; }
   const glm::mat4& View() const { return view_; }
+  const glm::mat4& Model() const { return model_; }
 
 public:
   glm::vec3 Position{ 0.f, 0.f, 4.f };
@@ -26,6 +27,7 @@ public:
 private:
   glm::mat4 proj_;
   glm::mat4 view_;
+  glm::mat4 model_;
   // TODO: storing these for GUI config
   float fov_;
   float aspect_;

@@ -73,17 +73,23 @@ CubeProgram::CubeProgram(SDL_GPUDevice* device,
   }
 }
 
+#define RELEASE_IF(ptr, release_func)                                          \
+  if (ptr != nullptr) {                                                        \
+    release_func(Device, ptr);                                                 \
+  }
 CubeProgram::~CubeProgram()
 {
   SDL_Log("Destroying app");
-  SDL_ReleaseGPUShader(Device, vertex_);
-  SDL_ReleaseGPUShader(Device, fragment_);
-  SDL_ReleaseGPUGraphicsPipeline(Device, scene_pipeline_);
-  SDL_ReleaseGPUGraphicsPipeline(Device, scene_wireframe_pipeline_);
-  SDL_ReleaseGPUTexture(Device, depth_target_);
-  SDL_ReleaseGPUTexture(Device, color_target_);
-  SDL_ReleaseGPUBuffer(Device, vbuffer_);
-  SDL_ReleaseGPUBuffer(Device, ibuffer_);
+
+  RELEASE_IF(vertex_, SDL_ReleaseGPUShader);
+  RELEASE_IF(fragment_, SDL_ReleaseGPUShader);
+  RELEASE_IF(scene_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
+  RELEASE_IF(scene_wireframe_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
+  RELEASE_IF(depth_target_, SDL_ReleaseGPUTexture);
+  RELEASE_IF(color_target_, SDL_ReleaseGPUTexture);
+  RELEASE_IF(vbuffer_, SDL_ReleaseGPUBuffer);
+  RELEASE_IF(ibuffer_, SDL_ReleaseGPUBuffer);
+
   SDL_Log("Released GPU Resources");
 
   SDL_WaitForGPUIdle(Device);
@@ -91,6 +97,7 @@ CubeProgram::~CubeProgram()
   ImGui_ImplSDLGPU3_Shutdown();
   ImGui::DestroyContext();
 }
+#undef RELEASE_IF
 
 bool
 CubeProgram::Init()
@@ -136,30 +143,26 @@ CubeProgram::Init()
   SDL_GPUGraphicsPipelineCreateInfo pipelineCreateInfo = {
       .vertex_shader = vertex_,
       .fragment_shader = fragment_,
-      .vertex_input_state =
-          {
+      .vertex_input_state = {
               .vertex_buffer_descriptions = vertex_desc,
               .num_vertex_buffers = 1,
               .vertex_attributes = vertex_attributes,
               .num_vertex_attributes = 2,
           },
       .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
-      .rasterizer_state =
-          {
+      .rasterizer_state = {
               .fill_mode = SDL_GPU_FILLMODE_FILL,
               .cull_mode = SDL_GPU_CULLMODE_NONE,
               .front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
           },
-      .depth_stencil_state =
-          {
-              .compare_op = SDL_GPU_COMPAREOP_LESS,
+      .depth_stencil_state = {
+              .compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL,
               .write_mask = 0xFF,
               .enable_depth_test = true,
               .enable_depth_write = true,
               .enable_stencil_test = false,
           },
-      .target_info =
-          {
+      .target_info = {
               .color_target_descriptions = color_descs,
               .num_color_targets = 1,
               .depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM,
@@ -198,6 +201,12 @@ CubeProgram::Init()
     return false;
   }
   SDL_Log("Created render target textures");
+
+  // if (!skybox_.Init()) {
+  //   SDL_Log("Couldn't load skybox. quitting");
+  //   return false;
+  // }
+  SDL_Log("Loaded Skybox");
 
   cube_transform_.translation_ = { 0.f, 0.f, 0.0f };
   cube_transform_.scale_ = { 1.f, 1.f, 1.f };
@@ -283,22 +292,28 @@ CubeProgram::Draw()
 
   UpdateScene(); // TODO: move out
   static SDL_GPUTextureSamplerBinding sampler_bind{ cube_tex_, cube_sampler_ };
-  MatricesBinding mvp{ camera_.Projection() * camera_.View(),
-                       cube_transform_.Matrix() };
+  auto vp = camera_.Projection() * camera_.View();
+  MatricesBinding mvp{ vp, cube_transform_.Matrix() };
+  auto cameraModel = camera_.Model();
   auto draw_data = DrawGui();
   auto d = instance_cfg.dimension;
   auto total_instances = d * d * d;
 
   ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmdbuf);
-  SDL_PushGPUVertexUniformData(cmdbuf, 0, &mvp, sizeof(mvp));
-  SDL_PushGPUVertexUniformData(cmdbuf, 1, &instance_cfg, sizeof(instance_cfg));
 
   // Scene Pass
   {
     scene_color_target_info_.texture = color_target_;
     scene_depth_target_info_.texture = depth_target_;
+    SDL_PushGPUVertexUniformData(cmdbuf, 0, &mvp, sizeof(mvp));
+    SDL_PushGPUVertexUniformData(cmdbuf, 1, &cameraModel, sizeof(cameraModel));
+    SDL_PushGPUVertexUniformData(
+      cmdbuf, 2, &instance_cfg, sizeof(instance_cfg));
+
     SDL_GPURenderPass* scenePass = SDL_BeginGPURenderPass(
       cmdbuf, &scene_color_target_info_, 1, &scene_depth_target_info_);
+
+    SDL_SetGPUViewport(scenePass, &scene_vp);
 
     SDL_BindGPUGraphicsPipeline(
       scenePass, wireframe_ ? scene_wireframe_pipeline_ : scene_pipeline_);
@@ -306,9 +321,11 @@ CubeProgram::Draw()
     SDL_BindGPUIndexBuffer(
       scenePass, &iBinding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
     SDL_BindGPUFragmentSamplers(scenePass, 0, &sampler_bind, 1);
-    SDL_SetGPUViewport(scenePass, &scene_vp);
     SDL_DrawGPUIndexedPrimitives(
       scenePass, INDEX_COUNT, total_instances, 0, 0, 0);
+
+    skybox_.Draw(scenePass);
+
     SDL_EndGPURenderPass(scenePass);
   }
 
@@ -329,7 +346,7 @@ CubeProgram::Draw()
 bool
 CubeProgram::LoadShaders()
 {
-  vertex_ = LoadShader(vertex_path_, Device, 0, 2, 0, 0);
+  vertex_ = LoadShader(vertex_path_, Device, 0, 3, 0, 0);
   if (vertex_ == nullptr) {
     SDL_Log("Couldn't load vertex shader at path %s", vertex_path_);
     return false;

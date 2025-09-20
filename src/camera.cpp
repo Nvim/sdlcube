@@ -46,6 +46,7 @@ Camera::Update()
   if (!Touched) {
     return;
   }
+  model_ = glm::translate(glm::mat4{ 1.f }, Position);
   setViewTarget();
   Touched = false;
 }
