@@ -31,6 +31,7 @@
           pre-commit
           gdbgui
           valgrind
+          glsl_analyzer
 
           # Shader stuff:
           glslang
