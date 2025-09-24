@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
+// #include <memory>
 
 // Program uses SDL GPU and Window to draw, but isn't responsible for
 // creating/releasing them.
@@ -12,12 +13,14 @@ public:
   SDL_Window* Window;
   float DeltaTime{ 0.0f };
   float lastTime{ 0.0f };
-  ~Program() {};
+  // static inline std::shared_ptr<spdlog::logger> s_app_logger{};
 
 public:
   Program(SDL_GPUDevice* device, SDL_Window* window)
     : Device{ device }
     , Window{ window } {};
+  ~Program() {};
+
   virtual bool Init() = 0;
   virtual bool Poll() = 0;
   virtual bool Draw() = 0;

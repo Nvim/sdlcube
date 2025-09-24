@@ -15,6 +15,7 @@
 #include <glm/gtc/constants.hpp>
 
 #include "src/camera.h"
+#include "src/mesh.h"
 #include "util.h"
 
 CubeProgram::CubeProgram(SDL_GPUDevice* device,
@@ -213,6 +214,12 @@ CubeProgram::Init()
 
   camera_.Position = glm::vec3{ 0.f, 1.f, -4.f };
   camera_.Target = glm::vec3{ 0.f, 0.f, 0.f };
+
+  auto pth = std::filesystem::path{"resources/models/BarramundiFish.glb"};
+  if (!LoadMesh(pth)) {
+    SDL_Log("couldn't load model");
+    return false;
+  }
 
   return true;
 }

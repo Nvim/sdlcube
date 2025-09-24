@@ -27,7 +27,7 @@ struct MatricesBinding
 struct InstancingCfg
 {
   float spread = 5.f;   // gap between each mesh instance
-  Uint32 dimension = 5; // instance count per side
+  Uint32 dimension = 6; // instance count per side
 };
 
 class CubeProgram : public Program

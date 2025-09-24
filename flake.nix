@@ -42,6 +42,7 @@
           sdl3
           sdl3-image
           glm
+          simdjson
 
           # runtime:
           libGL

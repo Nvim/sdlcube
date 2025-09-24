@@ -4,11 +4,13 @@
 #include <SDL3/SDL_video.h>
 
 #include "cube.h"
-#include "src/skybox.h"
+#include "src/logger.h"
 
 int
 main()
 {
+  Logger::Init();
+  LOG_DEBUG("Init");
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
     SDL_Log("Failed to initialize SDL: %s", SDL_GetError());
     return 1;
