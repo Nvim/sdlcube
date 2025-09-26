@@ -15,7 +15,7 @@
 #include <glm/gtc/constants.hpp>
 
 #include "src/camera.h"
-#include "src/mesh.h"
+#include "src/logger.h"
 #include "util.h"
 
 CubeProgram::CubeProgram(SDL_GPUDevice* device,
@@ -136,7 +136,7 @@ CubeProgram::Init()
 
   SDL_GPUVertexBufferDescription vertex_desc[] = { {
     .slot = 0,
-    .pitch = sizeof(PosUvVertex),
+    .pitch = sizeof(PosVertex),
     .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
     .instance_step_rate = 0,
   } };
@@ -185,6 +185,13 @@ CubeProgram::Init()
   }
   SDL_Log("Created pipelines");
 
+  if (!loader.Load()) {
+    LOG_CRITICAL("Couldn't initialize GLTF loader");
+    return false;
+  }
+  LOG_INFO("Loaded {} meshes", loader.Meshes().size());
+  assert(!loader.Meshes().empty());
+
   if (!SendVertexData()) {
     SDL_Log("Couldn't send vertex data!");
     return false;
@@ -210,16 +217,10 @@ CubeProgram::Init()
   SDL_Log("Loaded Skybox");
 
   cube_transform_.translation_ = { 0.f, 0.f, 0.0f };
-  cube_transform_.scale_ = { 1.f, 1.f, 1.f };
+  cube_transform_.scale_ = { 4.f, 4.f, 4.f };
 
   camera_.Position = glm::vec3{ 0.f, 1.f, -4.f };
   camera_.Target = glm::vec3{ 0.f, 0.f, 0.f };
-
-  auto pth = std::filesystem::path{"resources/models/BarramundiFish.glb"};
-  if (!LoadMesh(pth)) {
-    SDL_Log("couldn't load model");
-    return false;
-  }
 
   return true;
 }
@@ -305,6 +306,8 @@ CubeProgram::Draw()
   auto draw_data = DrawGui();
   auto d = instance_cfg.dimension;
   auto total_instances = d * d * d;
+  auto& mesh = loader.Meshes()[0];
+  auto idx_count = mesh.indices_.size();
 
   ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, cmdbuf);
 
@@ -329,7 +332,7 @@ CubeProgram::Draw()
       scenePass, &iBinding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
     SDL_BindGPUFragmentSamplers(scenePass, 0, &sampler_bind, 1);
     SDL_DrawGPUIndexedPrimitives(
-      scenePass, INDEX_COUNT, total_instances, 0, 0, 0);
+      scenePass, idx_count, total_instances, 0, 0, 0);
 
     skybox_.Draw(scenePass);
 
@@ -432,14 +435,21 @@ CubeProgram::LoadTextures()
 bool
 CubeProgram::SendVertexData()
 {
+  auto& mesh = loader.Meshes()[0];
+  auto vert_count = mesh.vertices_.size();
+  auto idx_count = mesh.indices_.size();
+  LOG_DEBUG("Mesh has {} vertices and {} indices", vert_count, idx_count);
+
   SDL_GPUBufferCreateInfo vertInfo = { .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-                                       .size =
-                                         sizeof(PosUvVertex) * VERT_COUNT };
+                                       .size = static_cast<Uint32>(
+                                         sizeof(PosVertex) * vert_count) };
   SDL_GPUBufferCreateInfo idxInfo = { .usage = SDL_GPU_BUFFERUSAGE_INDEX,
-                                      .size = sizeof(Uint16) * INDEX_COUNT };
+                                      .size = static_cast<Uint32>(
+                                        sizeof(Uint16) * idx_count) };
   SDL_GPUTransferBufferCreateInfo transferInfo = {
     .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-    .size = (sizeof(PosUvVertex) * VERT_COUNT) + (sizeof(Uint16) * INDEX_COUNT)
+    .size = static_cast<Uint32>((sizeof(PosVertex) * vert_count) +
+                                (sizeof(Uint16) * idx_count))
   };
 
   vbuffer_ = SDL_CreateGPUBuffer(Device, &vertInfo);
@@ -453,20 +463,20 @@ CubeProgram::SendVertexData()
   }
 
   // Transfer Buffer to send vertex data to GPU
-  PosUvVertex* transferData =
-    (PosUvVertex*)SDL_MapGPUTransferBuffer(Device, transferBuffer, false);
+  PosVertex* transferData =
+    (PosVertex*)SDL_MapGPUTransferBuffer(Device, transferBuffer, false);
   if (!transferData) {
     SDL_Log("couldn't get mapping for transfer buffer");
     return false;
   }
 
-  for (Uint8 i = 0; i < VERT_COUNT; ++i) {
-    transferData[i] = verts_uvs[i];
+  for (u32 i = 0; i < vert_count; ++i) {
+    transferData[i] = mesh.vertices_[i];
   }
 
-  Uint16* indexData = (Uint16*)&transferData[VERT_COUNT];
-  for (Uint8 i = 0; i < INDEX_COUNT; ++i) {
-    indexData[i] = indices[i];
+  Uint16* indexData = (Uint16*)&transferData[vert_count];
+  for (u32 i = 0; i < idx_count; ++i) {
+    indexData[i] = mesh.indices_[i];
   }
 
   SDL_UnmapGPUTransferBuffer(Device, transferBuffer);
@@ -483,12 +493,12 @@ CubeProgram::SendVertexData()
                                           .offset = 0 };
   SDL_GPUBufferRegion reg = { .buffer = vbuffer_,
                               .offset = 0,
-                              .size = sizeof(PosUvVertex) * VERT_COUNT };
+                              .size = static_cast<Uint32>(sizeof(PosVertex) * vert_count) };
   SDL_UploadToGPUBuffer(copyPass, &trLoc, &reg, false);
 
-  trLoc.offset = sizeof(PosUvVertex) * VERT_COUNT;
+  trLoc.offset = sizeof(PosVertex) * vert_count;
   reg.buffer = ibuffer_;
-  reg.size = sizeof(Uint16) * INDEX_COUNT;
+  reg.size = sizeof(Uint16) * idx_count;
 
   SDL_UploadToGPUBuffer(copyPass, &trLoc, &reg, false);
 

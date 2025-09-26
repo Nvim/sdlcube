@@ -7,6 +7,7 @@
 #include "camera.h"
 #include "program.h"
 #include "skybox.h"
+#include "src/gltf_loader.h"
 #include "transform.h"
 #include "util.h"
 
@@ -60,6 +61,7 @@ private:
   Transform cube_transform_;
   Camera camera_{ glm::radians(60.0f), 640 / 480.f, .1f, 100.f };
   Skybox skybox_{ "resources/textures/skybox", Window, Device };
+  GLTFLoader loader{"resources/models/BarramundiFish.glb"};
   const char* vertex_path_;
   const char* fragment_path_;
   const int vp_width_{ 640 };
