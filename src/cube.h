@@ -61,7 +61,7 @@ private:
   Transform cube_transform_;
   Camera camera_{ glm::radians(60.0f), 640 / 480.f, .1f, 100.f };
   Skybox skybox_{ "resources/textures/skybox", Window, Device };
-  GLTFLoader loader{"resources/models/BarramundiFish.glb"};
+  GLTFLoader loader{"resources/models/BarramundiFishGLTF/BarramundiFish.gltf"};
   const char* vertex_path_;
   const char* fragment_path_;
   const int vp_width_{ 640 };
@@ -75,8 +75,9 @@ private:
   // GPU Resources:
   SDL_GPUTexture* depth_target_{ nullptr };
   SDL_GPUTexture* color_target_{ nullptr };
-  SDL_GPUTexture* cube_tex_{ nullptr };
-  SDL_GPUSampler* cube_sampler_{ nullptr };
+  // TODO: store scene-related GPU Resources in GLTF scene class
+  std::vector<SDL_GPUTexture*> textures_; 
+  std::vector<SDL_GPUSampler*> samplers_;
   SDL_GPUShader* vertex_{ nullptr };
   SDL_GPUShader* fragment_{ nullptr };
   SDL_GPUGraphicsPipeline* scene_pipeline_{ nullptr };

@@ -4,18 +4,36 @@
 #include "fastgltf/glm_element_traits.hpp"
 #include "fastgltf/types.hpp"
 #include "src/util.h"
+#include <SDL3/SDL_surface.h>
+#include <cassert>
 #include <fastgltf/tools.hpp>
 #include <filesystem>
 #include <glm/ext/vector_float3.hpp>
+#include <string>
+#include <variant>
 
 GLTFLoader::GLTFLoader(std::filesystem::path path)
   : path_{ path }
 {
 }
+
+GLTFLoader::~GLTFLoader()
+{
+  for (SDL_Surface* s : images_) {
+    SDL_DestroySurface(s);
+  }
+}
+
 const std::vector<MeshAsset>&
 GLTFLoader::Meshes() const
 {
   return meshes_;
+}
+
+const std::vector<SDL_Surface*>&
+GLTFLoader::Surfaces() const
+{
+  return images_;
 }
 
 bool
@@ -37,8 +55,9 @@ GLTFLoader::Load()
   fastgltf::Asset gltf;
   fastgltf::Parser parser{};
 
-  auto asset =
-    parser.loadGltfBinary(data.get(), path_.parent_path(), gltfOptions);
+  auto asset = parser.loadGltf(data.get(), path_.parent_path(), gltfOptions);
+  // auto asset =
+  //   parser.loadGltfBinary(data.get(), path_.parent_path(), gltfOptions);
   if (auto error = asset.error(); error != fastgltf::Error::None) {
     LOG_ERROR("couldn't parse binary gltf");
     return false;
@@ -53,6 +72,17 @@ GLTFLoader::Load()
   asset_ = std::move(asset.get());
 
   loaded_ = LoadVertexData();
+  if (!loaded_) {
+    LOG_ERROR("Couldn't load vertex data from GLTF");
+    return false;
+  }
+  LOG_DEBUG("Loaded GLTF meshes");
+  loaded_ = LoadImageData();
+  if (!loaded_) {
+    LOG_ERROR("Couldn't load images from GLTF");
+    return false;
+  }
+  LOG_DEBUG("Loaded GLTF images");
 
   return loaded_;
 }
@@ -60,6 +90,7 @@ GLTFLoader::Load()
 bool
 GLTFLoader::LoadVertexData()
 {
+  LOG_TRACE("LoadVertexData");
   if (asset_.meshes.empty()) {
     LOG_WARN("LoadVertexData: GLTF has no meshes");
     return false;
@@ -101,12 +132,27 @@ GLTFLoader::LoadVertexData()
 
         fastgltf::iterateAccessorWithIndex<glm::vec3>(
           asset_, posAccessor, [&](glm::vec3 v, size_t index) {
-            PosVertex newvtx;
+            PosUvVertex newvtx;
             newvtx.pos[0] = v.x;
             newvtx.pos[1] = v.y;
             newvtx.pos[2] = v.z;
+            newvtx.uv[0] = 0;
+            newvtx.uv[1] = 0;
             vertices[initial_vtx + index] = newvtx;
           });
+      }
+
+      { // load vertex UVs
+        auto attr = p.findAttribute("TEXCOORD_0");
+        if (attr != p.attributes.end()) {
+          fastgltf::iterateAccessorWithIndex<glm::vec2>(
+            asset_,
+            asset_.accessors[(*attr).accessorIndex],
+            [&](glm::vec2 v, size_t index) {
+              vertices[initial_vtx + index].uv[0] = v.x;
+              vertices[initial_vtx + index].uv[1] = v.y;
+            });
+        }
       }
 
       newMesh.Submeshes.push_back(newGeometry);
@@ -121,4 +167,69 @@ GLTFLoader::LoadVertexData()
   }
   assert(meshes_[0].indices_.size() != 0);
   return true;
+}
+
+bool
+GLTFLoader::LoadImageData()
+{
+  LOG_TRACE("LoadImageData");
+  if (asset_.images.empty()) {
+    LOG_WARN("LoadImageData: GLTF has no images");
+    return false;
+  }
+
+  images_ = std::vector<SDL_Surface*>{};
+  // images_.reserve(asset_.images.size());
+
+  u32 tex_idx =
+    asset_.materials[0].pbrData.baseColorTexture.value().textureIndex;
+  assert(tex_idx == 0);
+  for (auto& image : asset_.images) {
+    LOG_TRACE("Visiting image");
+    // clang-format off
+    // std::visit(fastgltf::visitor{ 
+    //   []([[maybe_unused]] auto& arg) {LOG_WARN("No URI source");},
+    //   [&](fastgltf::sources::URI& filePath) {
+    //     assert(filePath.fileByteOffset == 0);
+    //     assert(filePath.uri.isLocalPath());
+    //     const std::string path(
+    //       filePath.uri.path().begin(),
+    //       filePath.uri.path().end()
+    //     );
+    //     auto surface = LoadImage(path.c_str());
+    //     if (!surface) {
+    //       LOG_ERROR("Couldn't load image: {}", SDL_GetError());
+    //     }
+    //     // else {
+    //       images_.push_back(surface);
+    //     // }
+    //   }
+    // }, image.data);
+    // clang-format on
+    if (std::holds_alternative<fastgltf::sources::URI>(image.data)) {
+      LOG_DEBUG("image has an URI. Index: {}", image.data.index());
+      // if (image.data.index() != 0) {
+      //   continue;
+      // }
+      LOG_DEBUG("found the 0th image");
+      auto filePath = std::get<fastgltf::sources::URI>(image.data);
+      assert(filePath.fileByteOffset == 0);
+      assert(filePath.uri.isLocalPath());
+      const std::string path(filePath.uri.path().begin(),
+                             filePath.uri.path().end());
+      auto* surface = LoadImage(
+        std::format("{}{}", "resources/models/BarramundiFishGLTF/", path)
+          .c_str());
+      if (!surface) {
+        LOG_ERROR("Couldn't load image: {}", SDL_GetError());
+      } else {
+        images_.push_back(surface);
+      }
+    } else {
+      LOG_WARN("Image doesn't have an URI");
+    }
+  }
+
+  LOG_DEBUG("{} images were pushed", images_.size());
+  return !images_.empty();
 }

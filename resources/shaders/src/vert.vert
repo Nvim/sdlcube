@@ -1,8 +1,8 @@
 #version 450 core
 
 layout(location = 0) in vec3 Pos;
-// layout(location = 1) in vec2 inUv;
-// layout(location = 0) out vec2 uv;
+layout(location = 1) in vec2 inUv;
+layout(location = 0) out vec2 uv;
 
 layout(std140, binding = 0, set = 1) uniform uMatrices {
     mat4 mat_vp;
@@ -20,7 +20,7 @@ layout(std140, binding = 2, set = 1) uniform uInstanceSettings {
 
 void main()
 {
-    // uv = inUv;
+    uv = inUv;
     uint instance = gl_InstanceIndex;
     uint square = dimension * dimension;
 

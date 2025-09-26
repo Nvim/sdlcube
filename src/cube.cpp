@@ -4,6 +4,7 @@
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
+#include <algorithm>
 #include <imgui/backends/imgui_impl_sdl3.h>
 #include <imgui/backends/imgui_impl_sdlgpu3.h>
 #include <imgui/imgui.h>
@@ -13,6 +14,7 @@
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtc/constants.hpp>
+#include <vector>
 
 #include "src/camera.h"
 #include "src/logger.h"
@@ -136,7 +138,7 @@ CubeProgram::Init()
 
   SDL_GPUVertexBufferDescription vertex_desc[] = { {
     .slot = 0,
-    .pitch = sizeof(PosVertex),
+    .pitch = sizeof(PosUvVertex),
     .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
     .instance_step_rate = 0,
   } };
@@ -217,7 +219,7 @@ CubeProgram::Init()
   SDL_Log("Loaded Skybox");
 
   cube_transform_.translation_ = { 0.f, 0.f, 0.0f };
-  cube_transform_.scale_ = { 4.f, 4.f, 4.f };
+  cube_transform_.scale_ = { 12.f, 12.f, 12.f };
 
   camera_.Position = glm::vec3{ 0.f, 1.f, -4.f };
   camera_.Target = glm::vec3{ 0.f, 0.f, 0.f };
@@ -252,7 +254,7 @@ CubeProgram::Poll()
 void
 CubeProgram::UpdateScene()
 {
-  static float c = -1.f;
+  // static float c = -1.f;
 
   for (const auto& rot : rotations_) {
     if (rot.speed != 0.f) {
@@ -261,11 +263,11 @@ CubeProgram::UpdateScene()
     }
   }
 
-  if (camera_.Position.z < -10.f) {
-    c = 1.f;
-  } else if (camera_.Position.z > -1.f) {
-    c = -1.f;
-  }
+  // if (camera_.Position.z < -10.f) {
+  //   c = 1.f;
+  // } else if (camera_.Position.z > -1.f) {
+  //   c = -1.f;
+  // }
   // camera_.Position.z += c * DeltaTime * 2.5f;
   // camera_.Touched = true;
   cube_transform_.Touched = true;
@@ -299,7 +301,8 @@ CubeProgram::Draw()
   }
 
   UpdateScene(); // TODO: move out
-  static SDL_GPUTextureSamplerBinding sampler_bind{ cube_tex_, cube_sampler_ };
+  assert(textures_[0] != nullptr && samplers_[0] != nullptr);
+  static SDL_GPUTextureSamplerBinding sampler_bind{ textures_[0], samplers_[0] };
   auto vp = camera_.Projection() * camera_.View();
   MatricesBinding mvp{ vp, cube_transform_.Matrix() };
   auto cameraModel = camera_.Model();
@@ -372,11 +375,14 @@ CubeProgram::LoadShaders()
 bool
 CubeProgram::LoadTextures()
 {
-  auto img = LoadImage("resources/textures/grass.png");
+  // auto img = LoadImage("resources/textures/grass.png");
+  auto img = loader.Surfaces()[0];
   if (!img) {
-    SDL_Log("Couldn't load image: %s", SDL_GetError());
+    LOG_ERROR("Couldn't load images");
     return false;
   }
+  samplers_ = std::vector<SDL_GPUSampler*>{};
+  textures_ = std::vector<SDL_GPUTexture*>{};
   SDL_GPUSamplerCreateInfo sampler_info{
     .min_filter = SDL_GPU_FILTER_NEAREST,
     .mag_filter = SDL_GPU_FILTER_NEAREST,
@@ -385,7 +391,7 @@ CubeProgram::LoadTextures()
     .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
     .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
   };
-  cube_sampler_ = SDL_CreateGPUSampler(Device, &sampler_info);
+  samplers_.push_back(SDL_CreateGPUSampler(Device, &sampler_info));
 
   SDL_GPUTextureCreateInfo tex_info{ .type = SDL_GPU_TEXTURETYPE_2D,
                                      .format =
@@ -396,7 +402,7 @@ CubeProgram::LoadTextures()
                                      .num_levels = 1,
                                      .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER };
 
-  cube_tex_ = SDL_CreateGPUTexture(Device, &tex_info);
+  textures_.push_back(SDL_CreateGPUTexture(Device, &tex_info));
 
   SDL_GPUTransferBufferCreateInfo transfer_info{
     .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
@@ -415,7 +421,7 @@ CubeProgram::LoadTextures()
     .offset = 0,
   };
   SDL_GPUTextureRegion tex_reg{
-    .texture = cube_tex_, .w = (Uint32)img->w, .h = (Uint32)img->h, .d = 1
+    .texture = textures_[0], .w = (Uint32)img->w, .h = (Uint32)img->h, .d = 1
   };
 
   {
@@ -442,13 +448,13 @@ CubeProgram::SendVertexData()
 
   SDL_GPUBufferCreateInfo vertInfo = { .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
                                        .size = static_cast<Uint32>(
-                                         sizeof(PosVertex) * vert_count) };
+                                         sizeof(PosUvVertex) * vert_count) };
   SDL_GPUBufferCreateInfo idxInfo = { .usage = SDL_GPU_BUFFERUSAGE_INDEX,
                                       .size = static_cast<Uint32>(
                                         sizeof(Uint16) * idx_count) };
   SDL_GPUTransferBufferCreateInfo transferInfo = {
     .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-    .size = static_cast<Uint32>((sizeof(PosVertex) * vert_count) +
+    .size = static_cast<Uint32>((sizeof(PosUvVertex) * vert_count) +
                                 (sizeof(Uint16) * idx_count))
   };
 
@@ -463,8 +469,8 @@ CubeProgram::SendVertexData()
   }
 
   // Transfer Buffer to send vertex data to GPU
-  PosVertex* transferData =
-    (PosVertex*)SDL_MapGPUTransferBuffer(Device, transferBuffer, false);
+  PosUvVertex* transferData =
+    (PosUvVertex*)SDL_MapGPUTransferBuffer(Device, transferBuffer, false);
   if (!transferData) {
     SDL_Log("couldn't get mapping for transfer buffer");
     return false;
@@ -493,10 +499,11 @@ CubeProgram::SendVertexData()
                                           .offset = 0 };
   SDL_GPUBufferRegion reg = { .buffer = vbuffer_,
                               .offset = 0,
-                              .size = static_cast<Uint32>(sizeof(PosVertex) * vert_count) };
+                              .size = static_cast<Uint32>(sizeof(PosUvVertex) *
+                                                          vert_count) };
   SDL_UploadToGPUBuffer(copyPass, &trLoc, &reg, false);
 
-  trLoc.offset = sizeof(PosVertex) * vert_count;
+  trLoc.offset = sizeof(PosUvVertex) * vert_count;
   reg.buffer = ibuffer_;
   reg.size = sizeof(Uint16) * idx_count;
 

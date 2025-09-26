@@ -14,7 +14,6 @@ public:
                   SDL_GPUDevice* device);
   ~Skybox();
 
-  bool Init(); // Draw call only
   bool IsLoaded() const { return loaded_; }
   void Draw(SDL_GPURenderPass* pass) const;
 
@@ -29,6 +28,7 @@ public:
   SDL_GPUGraphicsPipeline* Pipeline{ nullptr };
 
 private:
+  bool Init();
   bool CreatePipeline();
   bool SendVertexData() const;
   bool LoadTextures();
