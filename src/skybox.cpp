@@ -1,4 +1,5 @@
 #include "skybox.h"
+#include "src/logger.h"
 #include "util.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_assert.h>
@@ -16,7 +17,7 @@ Skybox::Skybox(const char* dir, SDL_Window* window, SDL_GPUDevice* device)
   , window_{ window }
 {
   if (!Init()) {
-    SDL_Log("Skybox initialization failed");
+    LOG_ERROR("Skybox initialization failed");
   }
 }
 
@@ -32,25 +33,28 @@ Skybox::Skybox(const char* dir,
   , window_{ window }
 {
   if (!Init()) {
-    SDL_Log("Skybox initialization failed");
+    LOG_ERROR("Skybox initialization failed");
   }
 }
 
 Skybox::~Skybox()
 {
-  // for (const auto tx : faces) {
-  //   SDL_ReleaseGPUTexture(device_, tx);
-  // }
-  // SDL_ReleaseGPUTexture(device_, Cubemap);
-  // SDL_ReleaseGPUSampler(device_, CubemapSampler);
-  // SDL_ReleaseGPUGraphicsPipeline(device_, Pipeline);
+  LOG_TRACE("Destroying Skybox");
+  auto* Device = device_;
+  for (const auto tx : faces) {
+    RELEASE_IF(tx, SDL_ReleaseGPUTexture)
+  }
+  RELEASE_IF(Cubemap, SDL_ReleaseGPUTexture);
+  RELEASE_IF(CubemapSampler, SDL_ReleaseGPUSampler);
+  RELEASE_IF(Pipeline, SDL_ReleaseGPUGraphicsPipeline);
 }
 
 bool
 Skybox::Init()
 {
+  LOG_TRACE("Skybox::Init");
   if (!CreatePipeline()) {
-    SDL_Log("Couldn't create skybox pipeline");
+    LOG_ERROR("Couldn't create skybox pipeline");
     return false;
   }
   SDL_GPUBufferCreateInfo bufInfo{};
@@ -78,15 +82,16 @@ Skybox::Init()
   CubemapSampler = SDL_CreateGPUSampler(device_, &samplerInfo);
 
   if (!SendVertexData()) {
-    SDL_Log("couldn't send skybox vertex data");
+    LOG_ERROR("couldn't send skybox vertex data");
     return false;
   }
 
   if (!LoadTextures()) {
-    SDL_Log("couldn't load skybox textures");
+    LOG_ERROR("couldn't load skybox textures");
     return false;
   }
 
+  LOG_INFO("Initialized skybox");
   loaded_ = true;
   return loaded_;
 }
@@ -94,21 +99,22 @@ Skybox::Init()
 bool
 Skybox::CreatePipeline()
 {
+  LOG_TRACE("Skybox::CreatePipeline");
   auto vert = LoadShader(VertPath, device_, 0, 2, 0, 0);
   if (vert == nullptr) {
-    SDL_Log("Couldn't load vertex shader at path %s", VertPath);
+    LOG_ERROR("Couldn't load vertex shader at path {}", VertPath);
     return false;
   }
   auto frag = LoadShader(FragPath, device_, 1, 1, 0, 0);
   if (frag == nullptr) {
-    SDL_Log("Couldn't load fragment shader at path %s", FragPath);
+    LOG_ERROR("Couldn't load fragment shader at path {}", FragPath);
     return false;
   }
 
   SDL_GPUColorTargetDescription col_desc = {};
   col_desc.format = SDL_GetGPUSwapchainTextureFormat(device_, window_);
   if (col_desc.format == SDL_GPU_TEXTUREFORMAT_INVALID) {
-    SDL_Log("no swapchain format");
+    LOG_ERROR("no swapchain format");
     return false;
   }
 
@@ -151,12 +157,19 @@ Skybox::CreatePipeline()
   SDL_ReleaseGPUShader(device_, vert);
   SDL_ReleaseGPUShader(device_, frag);
 
-  return Pipeline != nullptr;
+  auto ret = Pipeline != nullptr;
+  if (ret) {
+    LOG_DEBUG("Created skybox pipeline");
+  } else {
+    LOG_ERROR("Couldn't create skybox pipeline: {}", GETERR);
+  }
+  return ret;
 }
 
 bool
 Skybox::SendVertexData() const
 {
+  LOG_TRACE("Skybox::SendVertexData");
   Uint32 sz = (sizeof(PosVertex) * 24) + (sizeof(Uint16) * 36);
   SDL_GPUTransferBufferCreateInfo trInfo{};
   {
@@ -191,12 +204,19 @@ Skybox::SendVertexData() const
   }
 
   SDL_ReleaseGPUTransferBuffer(device_, trBuf);
-  return SDL_SubmitGPUCommandBuffer(cmdbuf);
+  auto ret = SDL_SubmitGPUCommandBuffer(cmdbuf);
+  if (ret) {
+    LOG_DEBUG("Sent skybox vertex data to GPU");
+  } else {
+    LOG_ERROR("Couldn't submit command buffer for vertex transfer: {}", GETERR);
+  }
+  return ret;
 }
 
 bool
 Skybox::LoadTextures()
 {
+  LOG_TRACE("Skybox::LoadTextures");
   std::vector<SDL_Surface*> imgs;
   { // Load all faces in memory
     for (int i = 0; i < 6; ++i) {
@@ -204,7 +224,7 @@ Skybox::LoadTextures()
       snprintf(pth, 256, "%s/%s", dir_, paths[i]);
       auto img = LoadImage(pth);
       if (!img) {
-        SDL_Log("couldn't load skybox texture: %s", SDL_GetError());
+        LOG_ERROR("couldn't load skybox texture: {}", GETERR);
         for (int j = 0; j < i; ++j) {
           SDL_DestroySurface(imgs[j]);
         }
@@ -230,7 +250,7 @@ Skybox::LoadTextures()
 
   if (!trBuf) {
     std::for_each(imgs.begin(), imgs.end(), freeImg);
-    SDL_Log("couldn't create GPU transfer buffer");
+    LOG_ERROR("couldn't create GPU transfer buffer: {}", GETERR);
     return false;
   }
 
@@ -240,7 +260,7 @@ Skybox::LoadTextures()
     if (!textureTransferPtr) {
       std::for_each(imgs.begin(), imgs.end(), freeImg);
       SDL_ReleaseGPUTransferBuffer(device_, trBuf);
-      SDL_Log("couldn't get transfer buffer mapping");
+      LOG_ERROR("couldn't get transfer buffer mapping: {}", GETERR);
       return false;
     }
     for (int i = 0; i < 6; ++i) {
@@ -264,8 +284,8 @@ Skybox::LoadTextures()
     };
     Cubemap = SDL_CreateGPUTexture(device_, &cubeMapInfo);
     if (!Cubemap) {
+      LOG_ERROR("couldn't create cubemap texture: {}", GETERR);
       SDL_ReleaseGPUTransferBuffer(device_, trBuf);
-      SDL_Log("couldn't create cubemap texture");
       return false;
     }
   }
@@ -273,8 +293,8 @@ Skybox::LoadTextures()
   { // Copy pass transfer buffer to GPU
     SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(device_);
     if (!cmdbuf) {
+      LOG_ERROR("couldn't get command buffer for copy pass: {}", GETERR);
       SDL_ReleaseGPUTransferBuffer(device_, trBuf);
-      SDL_Log("couldn't get command buffer for textures copy pass");
       return false;
     }
 
@@ -301,7 +321,7 @@ Skybox::LoadTextures()
   }
 
   SDL_ReleaseGPUTransferBuffer(device_, trBuf);
-  SDL_Log("Loaded skybox textures");
+  LOG_DEBUG("Loaded skybox textures");
   return true;
 }
 

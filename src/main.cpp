@@ -10,13 +10,13 @@ int
 main()
 {
   Logger::Init();
-  LOG_DEBUG("Init");
+  LOG_INFO("Starting..");
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
-    SDL_Log("Failed to initialize SDL: %s", SDL_GetError());
+    LOG_ERROR("Couldn't initialize SDL: {}", SDL_GetError());
     return 1;
   }
 
-  SDL_Log("Initialized SDL");
+  LOG_DEBUG("Initialized SDL");
 
   auto Device =
     SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL |
@@ -25,23 +25,23 @@ main()
                         NULL);
 
   if (Device == NULL) {
-    SDL_Log("GPUCreateDevice failed");
-    return -1;
+    LOG_ERROR("Couldn't create GPU device: {}", SDL_GetError());
+    return 1;
   }
-  SDL_Log("Created Device");
+  LOG_DEBUG("Created Device");
 
   auto Window = SDL_CreateWindow("Some cube idk", 1600, 1200, 0);
   if (Window == NULL) {
-    SDL_Log("CreateWindow failed: %s", SDL_GetError());
+    LOG_ERROR("Couldn't create SDL window: {}", SDL_GetError());
     return -1;
   }
-  SDL_Log("Created Window");
+  LOG_DEBUG("Created Window");
 
   if (!SDL_ClaimWindowForGPUDevice(Device, Window)) {
-    SDL_Log("GPUClaimWindow failed");
+    LOG_ERROR("Couldn't claim window: {}", SDL_GetError());
     return -1;
   }
-  SDL_Log("GPU claimed Window");
+  LOG_DEBUG("GPU claimed Window");
 
   { // app lifecycle
     CubeProgram app{ Device,
@@ -52,31 +52,32 @@ main()
                      900 };
 
     if (!app.Init()) {
-      SDL_Log("Couldn't init app.");
+      LOG_CRITICAL("Couldn't init app.");
     } else {
 
       while (!app.ShouldQuit()) {
         if (!app.Poll()) {
-          SDL_Log("App failed to Poll");
+          LOG_CRITICAL("App failed to Poll");
           break;
         }
         app.UpdateTime();
         if (app.ShouldQuit()) {
+          LOG_INFO("App recieved quit event. exiting..");
           break;
         }
         if (!app.Draw()) {
-          SDL_Log("App failed to draw");
+          LOG_CRITICAL("App failed to draw");
           break;
         };
       }
     }
   }
 
-  SDL_Log("Releasing resources..");
+  LOG_INFO("Releasing window and gpu context");
   SDL_ReleaseWindowFromGPUDevice(Device, Window);
   SDL_DestroyGPUDevice(Device);
   SDL_DestroyWindow(Window);
 
-  SDL_Log("Cleanup done");
+  LOG_INFO("Cleanup done");
   return 0;
 }

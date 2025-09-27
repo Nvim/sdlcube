@@ -75,13 +75,9 @@ CubeProgram::CubeProgram(SDL_GPUDevice* device,
   }
 }
 
-#define RELEASE_IF(ptr, release_func)                                          \
-  if (ptr != nullptr) {                                                        \
-    release_func(Device, ptr);                                                 \
-  }
 CubeProgram::~CubeProgram()
 {
-  SDL_Log("Destroying app");
+  LOG_TRACE("Destroying app");
 
   RELEASE_IF(vertex_, SDL_ReleaseGPUShader);
   RELEASE_IF(fragment_, SDL_ReleaseGPUShader);
@@ -92,34 +88,34 @@ CubeProgram::~CubeProgram()
   RELEASE_IF(vbuffer_, SDL_ReleaseGPUBuffer);
   RELEASE_IF(ibuffer_, SDL_ReleaseGPUBuffer);
 
-  SDL_Log("Released GPU Resources");
+  LOG_DEBUG("Released GPU Resources");
 
   SDL_WaitForGPUIdle(Device);
   ImGui_ImplSDL3_Shutdown();
   ImGui_ImplSDLGPU3_Shutdown();
   ImGui::DestroyContext();
 }
-#undef RELEASE_IF
 
 bool
 CubeProgram::Init()
 {
+  LOG_TRACE("CubeProgram::Init");
   if (!InitGui()) {
-    SDL_Log("Couldn't init imgui");
+    LOG_ERROR("Couldn't init imgui");
     return false;
   }
-  SDL_Log("Started ImGui");
+  LOG_DEBUG("Started ImGui");
   SDL_GPUShaderFormat backendFormats = SDL_GetGPUShaderFormats(Device);
   if (!(backendFormats & SDL_GPU_SHADERFORMAT_SPIRV)) {
-    SDL_Log("Backend doesn't support SPRIR-V");
+    LOG_ERROR("Backend doesn't support SPRIR-V");
     return false;
   }
 
   if (!LoadShaders()) {
-    SDL_Log("Couldn't load shaders");
+    LOG_ERROR("Couldn't load shaders");
     return false;
   }
-  SDL_Log("Loaded shaders");
+  LOG_DEBUG("Loaded shaders");
 
   SDL_GPUColorTargetDescription color_descs[1]{};
   color_descs[0].format = SDL_GetGPUSwapchainTextureFormat(Device, Window);
@@ -178,17 +174,17 @@ CubeProgram::Init()
 
   scene_pipeline_ = SDL_CreateGPUGraphicsPipeline(Device, &pipelineCreateInfo);
   if (scene_pipeline_ == NULL) {
-    SDL_Log("Couldn't create pipeline!");
+    LOG_ERROR("Couldn't create pipeline!");
     return false;
   }
   pipelineCreateInfo.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_LINE;
   scene_wireframe_pipeline_ =
     SDL_CreateGPUGraphicsPipeline(Device, &pipelineCreateInfo);
   if (scene_wireframe_pipeline_ == NULL) {
-    SDL_Log("Couldn't create wireframe pipeline!");
+    LOG_ERROR("Couldn't create wireframe pipeline!");
     return false;
   }
-  SDL_Log("Created pipelines");
+  LOG_DEBUG("Created pipelines");
 
   if (!loader.Load()) {
     LOG_CRITICAL("Couldn't initialize GLTF loader");
@@ -198,28 +194,22 @@ CubeProgram::Init()
   assert(!loader.Meshes().empty());
 
   if (!SendVertexData()) {
-    SDL_Log("Couldn't send vertex data!");
+    LOG_ERROR("Couldn't send vertex data!");
     return false;
   }
-  SDL_Log("Sent vertex data to GPU");
+  LOG_DEBUG("Sent vertex data to GPU");
 
   if (!LoadTextures()) {
-    SDL_Log("Couldn't load textures!");
+    LOG_ERROR("Couldn't load textures!");
     return false;
   }
-  SDL_Log("Loaded textures");
+  LOG_DEBUG("Loaded textures");
 
   if (!CreateSceneRenderTargets()) {
-    SDL_Log("Couldn't create render target textures!");
+    LOG_ERROR("Couldn't create render target textures!");
     return false;
   }
-  SDL_Log("Created render target textures");
-
-  // if (!skybox_.Init()) {
-  //   SDL_Log("Couldn't load skybox. quitting");
-  //   return false;
-  // }
-  SDL_Log("Loaded Skybox");
+  LOG_DEBUG("Created render target textures");
 
   cube_transform_.translation_ = { 0.f, 0.f, 0.0f };
   cube_transform_.scale_ = { 12.f, 12.f, 12.f };
@@ -227,6 +217,7 @@ CubeProgram::Init()
   camera_.Position = glm::vec3{ 0.f, 1.f, -4.f };
   camera_.Target = glm::vec3{ 0.f, 0.f, 0.f };
 
+  LOG_INFO("Initialized application");
   return true;
 }
 
@@ -288,14 +279,14 @@ CubeProgram::Draw()
 
   SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(Device);
   if (cmdbuf == NULL) {
-    SDL_Log("AcquireGPUCommandBuffer failed: %s", SDL_GetError());
+    LOG_ERROR("Couldn't acquire command buffer: {}", SDL_GetError());
     return false;
   }
 
   SDL_GPUTexture* swapchainTexture;
   if (!SDL_WaitAndAcquireGPUSwapchainTexture(
         cmdbuf, Window, &swapchainTexture, NULL, NULL)) {
-    SDL_Log("WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
+    LOG_ERROR("Couldn't acquire swapchain texture: {}", SDL_GetError());
     return false;
   }
   if (swapchainTexture == NULL) {
@@ -363,14 +354,15 @@ CubeProgram::Draw()
 bool
 CubeProgram::LoadShaders()
 {
+  LOG_TRACE("CubeProgram::LoadShaders");
   vertex_ = LoadShader(vertex_path_, Device, 0, 3, 0, 0);
   if (vertex_ == nullptr) {
-    SDL_Log("Couldn't load vertex shader at path %s", vertex_path_);
+    LOG_ERROR("Couldn't load vertex shader at path {}", vertex_path_);
     return false;
   }
   fragment_ = LoadShader(fragment_path_, Device, 1, 1, 0, 0);
   if (fragment_ == nullptr) {
-    SDL_Log("Couldn't load fragment shader at path %s", fragment_path_);
+    LOG_ERROR("Couldn't load fragment shader at path {}", fragment_path_);
     return false;
   }
   return true;
@@ -379,6 +371,7 @@ CubeProgram::LoadShaders()
 bool
 CubeProgram::LoadTextures()
 {
+  LOG_TRACE("CubeProgram::LoadTextures");
   // auto img = LoadImage("resources/textures/grass.png");
   auto img = loader.Surfaces()[0];
   if (!img) {
@@ -450,6 +443,7 @@ CubeProgram::LoadTextures()
 bool
 CubeProgram::SendVertexData()
 {
+  LOG_TRACE("CubeProgram::SendVertexData");
   auto& mesh = loader.Meshes()[0];
   auto vert_count = mesh.vertices_.size();
   auto idx_count = mesh.indices_.size();
@@ -480,7 +474,7 @@ CubeProgram::SendVertexData()
     SDL_CreateGPUTransferBuffer(Device, &transferInfo);
 
   if (!vbuffer_ || !ibuffer_ || !transferBuffer) {
-    SDL_Log("couldn't create buffers");
+    LOG_ERROR("couldn't create buffers");
     return false;
   }
 
@@ -488,7 +482,7 @@ CubeProgram::SendVertexData()
   PosUvVertex* transferData =
     (PosUvVertex*)SDL_MapGPUTransferBuffer(Device, transferBuffer, false);
   if (!transferData) {
-    SDL_Log("couldn't get mapping for transfer buffer");
+    LOG_ERROR("couldn't get mapping for transfer buffer");
     return false;
   }
 
@@ -506,7 +500,7 @@ CubeProgram::SendVertexData()
   // Upload the transfer data to the GPU resources
   SDL_GPUCommandBuffer* uploadCmdBuf = SDL_AcquireGPUCommandBuffer(Device);
   if (!uploadCmdBuf) {
-    SDL_Log("couldn't acquire command buffer");
+    LOG_ERROR("couldn't acquire command buffer");
     return false;
   }
   SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(uploadCmdBuf);
@@ -527,7 +521,7 @@ CubeProgram::SendVertexData()
 
   SDL_EndGPUCopyPass(copyPass);
   if (!SDL_SubmitGPUCommandBuffer(uploadCmdBuf)) {
-    SDL_Log("couldn't submit copy pass command buffer");
+    LOG_ERROR("couldn't submit copy pass command buffer");
     return false;
   }
   SDL_ReleaseGPUTransferBuffer(Device, transferBuffer);
@@ -538,6 +532,7 @@ CubeProgram::SendVertexData()
 bool
 CubeProgram::CreateSceneRenderTargets()
 {
+  LOG_TRACE("CubeProgram::CreateSceneRenderTargets");
   auto info = SDL_GPUTextureCreateInfo{};
   {
     info.type = SDL_GPU_TEXTURETYPE_2D,
@@ -562,6 +557,7 @@ CubeProgram::CreateSceneRenderTargets()
 bool
 CubeProgram::InitGui()
 {
+  LOG_TRACE("CubeProgram::InitGui");
   float main_scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();

@@ -39,11 +39,11 @@ GLTFLoader::Surfaces() const
 bool
 GLTFLoader::Load()
 {
+  LOG_TRACE("GLTFLoader::Load");
   if (!std::filesystem::exists(path_)) {
     LOG_ERROR("path {} is invalid", path_.c_str());
     return false;
   }
-  LOG_TRACE("LoadMesh");
   auto data = fastgltf::GltfDataBuffer::FromPath(path_);
   if (data.error() != fastgltf::Error::None) {
     LOG_ERROR("couldn't load gltf from path");
@@ -90,7 +90,7 @@ GLTFLoader::Load()
 bool
 GLTFLoader::LoadVertexData()
 {
-  LOG_TRACE("LoadVertexData");
+  LOG_TRACE("GLTFLoader::LoadVertexData");
   if (asset_.meshes.empty()) {
     LOG_WARN("LoadVertexData: GLTF has no meshes");
     return false;
@@ -172,7 +172,7 @@ GLTFLoader::LoadVertexData()
 bool
 GLTFLoader::LoadImageData()
 {
-  LOG_TRACE("LoadImageData");
+  LOG_TRACE("GLTFLoader::LoadImageData");
   if (asset_.images.empty()) {
     LOG_WARN("LoadImageData: GLTF has no images");
     return false;

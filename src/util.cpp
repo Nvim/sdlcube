@@ -1,4 +1,5 @@
 #include "util.h"
+#include "src/logger.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
@@ -17,13 +18,13 @@ LoadShader(const char* path,
   } else if (SDL_strstr(path, "frag")) {
     stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
   } else {
-    SDL_Log("Invalid shader stage!");
+    LOG_ERROR("Invalid shader stage!");
     return NULL;
   }
   size_t codeSize;
   void* code = SDL_LoadFile(path, &codeSize);
   if (code == NULL) {
-    SDL_Log("Failed to load shader from disk! %s", path);
+    LOG_ERROR("Couldn't load shader code from path: {}", path);
     return NULL;
   }
 
@@ -42,11 +43,12 @@ LoadShader(const char* path,
 
   SDL_GPUShader* shader = SDL_CreateGPUShader(device, &shaderInfo);
   if (shader == NULL) {
-    SDL_Log("Failed to create shader!");
+    LOG_ERROR("Failed to create shader: {}", GETERR);
     SDL_free(code);
     return NULL;
   }
 
+  LOG_DEBUG("Created shader from path: {}", path);
   SDL_free(code);
   return shader;
 }
@@ -54,13 +56,8 @@ LoadShader(const char* path,
 SDL_Surface*
 LoadImage(const char* path)
 {
-  // char fullPath[256];
   SDL_Surface* result;
   SDL_PixelFormat format;
-
-  // SDL_snprintf(
-  //   fullPath, sizeof(fullPath), "%sContent/Images/%s", BasePath,
-  //   imageFilename);
 
   result = IMG_Load(path);
   if (result == NULL) {
@@ -74,5 +71,6 @@ LoadImage(const char* path)
     result = next;
   }
 
+  LOG_DEBUG("Created surface from image: {}", path);
   return result;
 }

@@ -18,6 +18,13 @@ struct PosUvVertex
   float uv[2];
 };
 
+#define RELEASE_IF(ptr, release_func)                                          \
+  if (ptr != nullptr) {                                                        \
+    release_func(Device, ptr);                                                 \
+  }
+
+#define GETERR SDL_GetError()
+
 SDL_GPUShader*
 LoadShader(const char* path,
            SDL_GPUDevice* device,
