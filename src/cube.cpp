@@ -4,7 +4,6 @@
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
-#include <algorithm>
 #include <imgui/backends/imgui_impl_sdl3.h>
 #include <imgui/backends/imgui_impl_sdlgpu3.h>
 #include <imgui/imgui.h>
@@ -122,9 +121,9 @@ CubeProgram::Init()
   }
   SDL_Log("Loaded shaders");
 
-  SDL_GPUColorTargetDescription color_descs[] = { {
-    .format = SDL_GetGPUSwapchainTextureFormat(Device, Window),
-  } };
+  SDL_GPUColorTargetDescription color_descs[1]{};
+  color_descs[0].format = SDL_GetGPUSwapchainTextureFormat(Device, Window);
+
   SDL_GPUVertexAttribute vertex_attributes[] = {
     { .location = 0,
       .buffer_slot = 0,
@@ -143,35 +142,39 @@ CubeProgram::Init()
     .instance_step_rate = 0,
   } };
 
-  SDL_GPUGraphicsPipelineCreateInfo pipelineCreateInfo = {
-      .vertex_shader = vertex_,
-      .fragment_shader = fragment_,
-      .vertex_input_state = {
-              .vertex_buffer_descriptions = vertex_desc,
-              .num_vertex_buffers = 1,
-              .vertex_attributes = vertex_attributes,
-              .num_vertex_attributes = 2,
-          },
-      .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
-      .rasterizer_state = {
-              .fill_mode = SDL_GPU_FILLMODE_FILL,
-              .cull_mode = SDL_GPU_CULLMODE_NONE,
-              .front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
-          },
-      .depth_stencil_state = {
-              .compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL,
-              .write_mask = 0xFF,
-              .enable_depth_test = true,
-              .enable_depth_write = true,
-              .enable_stencil_test = false,
-          },
-      .target_info = {
-              .color_target_descriptions = color_descs,
-              .num_color_targets = 1,
-              .depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM,
-              .has_depth_stencil_target = true,
-          },
-  };
+  SDL_GPUGraphicsPipelineCreateInfo pipelineCreateInfo{};
+  {
+    pipelineCreateInfo.vertex_shader = vertex_;
+    pipelineCreateInfo.fragment_shader = fragment_;
+    pipelineCreateInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+    {
+      auto& state = pipelineCreateInfo.vertex_input_state;
+      state.vertex_buffer_descriptions = vertex_desc;
+      state.num_vertex_buffers = 1, state.vertex_attributes = vertex_attributes;
+      state.num_vertex_attributes = 2;
+    }
+    {
+      auto& state = pipelineCreateInfo.rasterizer_state;
+      state.fill_mode = SDL_GPU_FILLMODE_FILL,
+      state.cull_mode = SDL_GPU_CULLMODE_NONE;
+      state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+    }
+    {
+      auto& state = pipelineCreateInfo.depth_stencil_state;
+      state.compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
+      state.write_mask = 0xFF;
+      state.enable_depth_test = true;
+      state.enable_depth_write = true;
+      state.enable_stencil_test = false;
+    }
+    {
+      auto& info = pipelineCreateInfo.target_info;
+      info.color_target_descriptions = color_descs;
+      info.num_color_targets = 1;
+      info.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+      info.has_depth_stencil_target = true;
+    }
+  }
 
   scene_pipeline_ = SDL_CreateGPUGraphicsPipeline(Device, &pipelineCreateInfo);
   if (scene_pipeline_ == NULL) {
@@ -302,7 +305,8 @@ CubeProgram::Draw()
 
   UpdateScene(); // TODO: move out
   assert(textures_[0] != nullptr && samplers_[0] != nullptr);
-  static SDL_GPUTextureSamplerBinding sampler_bind{ textures_[0], samplers_[0] };
+  static SDL_GPUTextureSamplerBinding sampler_bind{ textures_[0],
+                                                    samplers_[0] };
   auto vp = camera_.Projection() * camera_.View();
   MatricesBinding mvp{ vp, cube_transform_.Matrix() };
   auto cameraModel = camera_.Model();
@@ -383,46 +387,51 @@ CubeProgram::LoadTextures()
   }
   samplers_ = std::vector<SDL_GPUSampler*>{};
   textures_ = std::vector<SDL_GPUTexture*>{};
-  SDL_GPUSamplerCreateInfo sampler_info{
-    .min_filter = SDL_GPU_FILTER_NEAREST,
-    .mag_filter = SDL_GPU_FILTER_NEAREST,
-    .mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
-    .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
-    .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
-    .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
-  };
+  SDL_GPUSamplerCreateInfo sampler_info{};
+  {
+    sampler_info.min_filter = SDL_GPU_FILTER_NEAREST;
+    sampler_info.mag_filter = SDL_GPU_FILTER_NEAREST;
+    sampler_info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    sampler_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+  }
   samplers_.push_back(SDL_CreateGPUSampler(Device, &sampler_info));
 
-  SDL_GPUTextureCreateInfo tex_info{ .type = SDL_GPU_TEXTURETYPE_2D,
-                                     .format =
-                                       SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
-                                     .width = static_cast<Uint32>(img->w),
-                                     .height = static_cast<Uint32>(img->h),
-                                     .layer_count_or_depth = 1,
-                                     .num_levels = 1,
-                                     .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER };
-
+  SDL_GPUTextureCreateInfo tex_info{};
+  {
+    tex_info.type = SDL_GPU_TEXTURETYPE_2D;
+    tex_info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    tex_info.width = static_cast<Uint32>(img->w);
+    tex_info.height = static_cast<Uint32>(img->h);
+    tex_info.layer_count_or_depth = 1;
+    tex_info.num_levels = 1;
+    tex_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+  }
   textures_.push_back(SDL_CreateGPUTexture(Device, &tex_info));
 
-  SDL_GPUTransferBufferCreateInfo transfer_info{
-    .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-    .size = (Uint32)img->w * (Uint32)img->h * 4
+  SDL_GPUTransferBufferCreateInfo tr_info{};
+  {
+    tr_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    tr_info.size = (Uint32)img->w * (Uint32)img->h * 4;
   };
-  SDL_GPUTransferBuffer* textureTransferBuffer =
-    SDL_CreateGPUTransferBuffer(Device, &transfer_info);
+  SDL_GPUTransferBuffer* trBuf = SDL_CreateGPUTransferBuffer(Device, &tr_info);
 
-  void* textureTransferPtr =
-    SDL_MapGPUTransferBuffer(Device, textureTransferBuffer, false);
+  void* textureTransferPtr = SDL_MapGPUTransferBuffer(Device, trBuf, false);
   SDL_memcpy(textureTransferPtr, img->pixels, img->w * img->h * 4);
-  SDL_UnmapGPUTransferBuffer(Device, textureTransferBuffer);
+  SDL_UnmapGPUTransferBuffer(Device, trBuf);
 
-  SDL_GPUTextureTransferInfo tex_transfer_info{
-    .transfer_buffer = textureTransferBuffer,
-    .offset = 0,
-  };
-  SDL_GPUTextureRegion tex_reg{
-    .texture = textures_[0], .w = (Uint32)img->w, .h = (Uint32)img->h, .d = 1
-  };
+  SDL_GPUTextureTransferInfo tex_transfer_info{};
+  tex_transfer_info.transfer_buffer = trBuf;
+  tex_transfer_info.offset = 0;
+
+  SDL_GPUTextureRegion tex_reg{};
+  {
+    tex_reg.texture = textures_[0];
+    tex_reg.w = (Uint32)img->w;
+    tex_reg.h = (Uint32)img->h;
+    tex_reg.d = 1;
+  }
 
   {
     SDL_GPUCommandBuffer* cmdBuf = SDL_AcquireGPUCommandBuffer(Device);
@@ -432,7 +441,7 @@ CubeProgram::LoadTextures()
     SDL_EndGPUCopyPass(copyPass);
     SDL_SubmitGPUCommandBuffer(cmdBuf);
     SDL_DestroySurface(img);
-    SDL_ReleaseGPUTransferBuffer(Device, textureTransferBuffer);
+    SDL_ReleaseGPUTransferBuffer(Device, trBuf);
   }
 
   return true;
@@ -446,17 +455,24 @@ CubeProgram::SendVertexData()
   auto idx_count = mesh.indices_.size();
   LOG_DEBUG("Mesh has {} vertices and {} indices", vert_count, idx_count);
 
-  SDL_GPUBufferCreateInfo vertInfo = { .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-                                       .size = static_cast<Uint32>(
-                                         sizeof(PosUvVertex) * vert_count) };
-  SDL_GPUBufferCreateInfo idxInfo = { .usage = SDL_GPU_BUFFERUSAGE_INDEX,
-                                      .size = static_cast<Uint32>(
-                                        sizeof(Uint16) * idx_count) };
-  SDL_GPUTransferBufferCreateInfo transferInfo = {
-    .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-    .size = static_cast<Uint32>((sizeof(PosUvVertex) * vert_count) +
-                                (sizeof(Uint16) * idx_count))
-  };
+  SDL_GPUBufferCreateInfo vertInfo{};
+  {
+    vertInfo.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
+    vertInfo.size = static_cast<Uint32>(sizeof(PosUvVertex) * vert_count);
+  }
+
+  SDL_GPUBufferCreateInfo idxInfo{};
+  {
+    idxInfo.usage = SDL_GPU_BUFFERUSAGE_INDEX;
+    idxInfo.size = static_cast<Uint32>(sizeof(Uint16) * idx_count);
+  }
+
+  SDL_GPUTransferBufferCreateInfo transferInfo{};
+  {
+    Uint32 sz = sizeof(PosUvVertex) * vert_count + sizeof(Uint16) * idx_count;
+    transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    transferInfo.size = sz;
+  }
 
   vbuffer_ = SDL_CreateGPUBuffer(Device, &vertInfo);
   ibuffer_ = SDL_CreateGPUBuffer(Device, &idxInfo);
@@ -522,16 +538,17 @@ CubeProgram::SendVertexData()
 bool
 CubeProgram::CreateSceneRenderTargets()
 {
-  auto info =
-    SDL_GPUTextureCreateInfo{ .type = SDL_GPU_TEXTURETYPE_2D,
-                              .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
-                              .width = static_cast<Uint32>(vp_width_),
-                              .height = static_cast<Uint32>(vp_height_),
-                              .layer_count_or_depth = 1,
-                              .num_levels = 1,
-                              .sample_count = SDL_GPU_SAMPLECOUNT_1,
-                              .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER |
-                                       SDL_GPU_TEXTUREUSAGE_COLOR_TARGET };
+  auto info = SDL_GPUTextureCreateInfo{};
+  {
+    info.type = SDL_GPU_TEXTURETYPE_2D,
+    info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+    info.width = static_cast<Uint32>(vp_width_),
+    info.height = static_cast<Uint32>(vp_height_),
+    info.layer_count_or_depth = 1, info.num_levels = 1,
+    info.sample_count = SDL_GPU_SAMPLECOUNT_1,
+    info.usage =
+      SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+  }
   color_target_ = SDL_CreateGPUTexture(Device, &info);
 
   info.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;

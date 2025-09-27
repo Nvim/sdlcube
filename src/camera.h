@@ -30,9 +30,9 @@ private:
   glm::mat4 model_;
   // TODO: storing these for GUI config
   float fov_;
-  float aspect_;
-  float near_;
-  float far_;
+  [[maybe_unused]] float aspect_;
+  [[maybe_unused]] float near_;
+  [[maybe_unused]] float far_;
   glm::vec3 up_;
 
   void setViewTarget();
