@@ -17,7 +17,6 @@ if (NOT BUILD_SDL)
   find_package(SDL3 REQUIRED)
 endif()
 find_package(glm REQUIRED)
-find_package(simdjson REQUIRED)
 
 # Add submodules directory
 add_subdirectory(${PROJECT_SOURCE_DIR}/thirdparty)

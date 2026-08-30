@@ -18,6 +18,9 @@ target_sources(imgui PRIVATE
 "${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends/imgui_impl_sdl3.cpp"
 )
 
+# Simdjson
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/simdjson")
+
 # Fastgltf
 set(FASTGLTF_COMPILE_AS_CPP20 YES CACHE BOOL "Compile fastgltf as C++20" )
 set(FASTGLTF_ENABLE_TESTS NO CACHE BOOL "Disable fastgltf tests" )

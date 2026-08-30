@@ -37,7 +37,6 @@ Valid app names are `pbr` and `grass`.
 The following libraries are expected to be installed system-wide:
 - [SDL3](https://github.com/libsdl-org/SDL) (you can choose to build by defining the `BUILD_SDL` CMake option)
 - [glm](https://github.com/g-truc/glm)
-- [simdjson](https://github.com/simdjson/simdjson) (it's supposed to be fetched & built as a dependency of fastgltf, but it doesn't work for me)
 
 These are built along with the project (make sure to clone submodules):
 - [spdlog](https://github.com/gabime/spdlog.git)
@@ -47,6 +46,7 @@ These are built along with the project (make sure to clone submodules):
 - [Catch2](https://github.com/catchorg/Catch2/)
 - [ktx](https://github.com/KhronosGroup/KTX-Software)
 - [mikktspace](https://github.com/mmikk/MikkTSpace)
+- [simdjson](https://github.com/simdjson/simdjson)
 
 
 ### Shaders

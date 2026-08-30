@@ -1,1 +1,3 @@
+set(SDL_X11_XSCRNSAVER OFF)
+set(SDL_X11_XTEST OFF)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/SDL")
