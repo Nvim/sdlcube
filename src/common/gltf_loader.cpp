@@ -118,7 +118,9 @@ GLTFLoader::Release()
   auto Device = engine_->Device;
   RELEASE_IF(transparent_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
   RELEASE_IF(opaque_pipeline_, SDL_ReleaseGPUGraphicsPipeline);
-  RELEASE_IF(default_sampler_, SDL_ReleaseGPUSampler)
+  if (should_free_default_sampler_) {
+    RELEASE_IF(default_sampler_, SDL_ReleaseGPUSampler)
+  }
 
   LOG_DEBUG("Released GLTFLoader resources");
 }
@@ -667,6 +669,8 @@ GLTFLoader::CreateDefaultSampler()
   }
   default_sampler_ = engine_->LinearRepeatSampler();
   assert(default_sampler_);
+
+  should_free_default_sampler_ = false; // view note in header
   return true;
 }
 

@@ -80,7 +80,15 @@ private:
   fastgltf::Asset asset_;
   UniquePtr<TangentLoader> tangent_loader_{ nullptr };
 
+  /**
+   * [NOTE]: default sampler is initialized as engine's default sampler, and
+   * shouldn't be released it here.
+   * Maybe someday i'll write these raii wrappers for SDL types :)
+   *
+   */
   SDL_GPUSampler* default_sampler_{ nullptr };
+  bool should_free_default_sampler_{ false };
+
   SDL_GPUTexture* default_texture_{ nullptr };
   SharedPtr<GLTFPbrMaterial> default_material_{ nullptr };
 
